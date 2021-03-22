@@ -1,0 +1,40 @@
+    void scrollTo(int index);
+
+
+void rotateRandom()
+{
+    qDebug()<<"I am Runing Enter";
+    m_wheel1->scrollTo(m_wheel1->currentIndex() + (qrand() % 200));
+    qDebug()<<"I am Runing Exit";
+}
+
+void AbstractWheelWidget::scrollTo(int index)
+{
+    QScroller *scroller = QScroller::scroller(this);
+
+    scroller->scrollTo(QPointF(0, WHEEL_SCROLL_OFFSET + index * itemHeight()), 5000);
+}
+
+void StringWheelWidget::setItems( const QStringList &items )
+{
+    m_items = items;
+    if (m_currentItem >= items.count())
+    {
+        m_currentItem = items.count()-1;
+    }
+    update();
+}
+
+int StringWheelWidget::itemHeight() const
+{
+    QFontMetrics fm(font());
+    return fm.height();
+}
+
+int StringWheelWidget::itemCount() const
+{
+    return m_items.count();
+}
+
+
+//     32                    9    
