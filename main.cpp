@@ -17,6 +17,9 @@
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+
+
+
     Widget w;
 
     int index = QFontDatabase::addApplicationFont("/home/HYQiHei-65S.ttf");
@@ -86,10 +89,7 @@ int main(int argc, char *argv[])
     First_Page_Create = 0;
     First_Page_Update = 1;
 
-
-
     qDebug("16619851335\n");
-
 
 
     return a.exec();

@@ -9,7 +9,7 @@
 #include <QMutex>
 #include <QList>
 #include <QQueue>
-
+#include "led.h"
 
 
 extern QMutex mutex;
@@ -24,22 +24,18 @@ public:
     explicit Widget(QWidget *parent = 0);
     ~Widget();
 
-    QTimer *Gui_Upate_Cycle_Timer;
-    void Quick_Scroll_Once_Handle();
-    //void Scroll_Quick_TimeOut_Update_GUI();
-    //void Handle_Touch_Value_Event(void);
+
+
 protected:
     void paintEvent(QPaintEvent *); //重绘函数
     void paintItems(QPainter *, QStringList*, int index, QFont*); //绘制文字
 
 private:
     volatile unsigned char High_Scroll_Flage;
-    volatile int Add_Step_By_Step;        //变化数
-    //int Add_Step_By_Step_Flage;  //变化方向
-    int Is_Speed_Low_Scroll;     //慢滑动标志位
+    volatile int Add_Step_By_Step;  //变化数
+    int Is_Speed_Low_Scroll;        //慢滑动标志位
 
-    int Last_Update_GUI;         //上电和最终初始化GUI 标志位
-
+    int Last_Update_GUI;            //上电和最终初始化GUI 标志位
 
     int totalItemNum;       //总的item数量
     int selectItemIndex;    //当前选中item索引
@@ -49,6 +45,12 @@ private:
     int baseFontSize;       //中心字体大小
     int itemIntervalH;      //菜单垂直间隔
     int itemRealH;          //菜单实际间隔（菜单字符宽度+间隔）
+
+
+    int Select_Show_Menu_Spell_Index;     //当前选中拼音首字母索引
+    int Total_Show_Menu_Spell_Num;        //菜单拼音首字母个数
+    QStringList Menu_Spell_Display_List;  //显示菜单拼音首字母
+    QStringList Menu_Spell_List;          //菜单拼音首字母
 
     QFont itemFont;         //菜单字体样式
 
@@ -72,6 +74,11 @@ private:
 
     volatile unsigned char Quick_Allow_Flage;
     volatile unsigned char Quick_Scroll_Update_Flage;
+    volatile unsigned char Widget_Page_Switch;
+
+    unsigned char Total_Page = 0;
+    unsigned char Current_Page = 0;
+    QString String_Display;
     QTimer *Slow_Scroll_Timer;   //慢滑定时器
     QTimer *Release_Timeout;
     QTimer *Release_Slow_Dir_Timeout;
@@ -83,12 +90,23 @@ private:
 
     QTimer *Quick_Scroll_Slot_Timer;
 
+    QTimer *Motor_Shake_Slot_Timer;
+
     QLabel *Label_Button_Text;
+
+
+    QStringList Button_Determine_list;
+    QStringList Button_Cancel_list;
     QPushButton *Button_Determine;//确定按钮
+    QPushButton *Button_Cancel;   //取消按钮
+
+
     QSlider *Slider_p;            //滑动条
 
-
+    //Led Shock_Motor;
 private slots:
+
+    //void Motor_Shake_Slot_Timer_Handler();
 
     void Quick_Scroll_Update_Timer_Slot_Handle();
 
@@ -96,14 +114,16 @@ private slots:
     void Slow_Scroll_Timer_Handle();
     void Release_TimeOut_Update_GUI();
     void Release_Slow_Dir_TimeOut_Update_GUI();
+    void Release_Slow_Dir_Near_Update_GUI();
 
-    void Quick_Scroll_Update_Timer_Handle();
+
+    //void Quick_Scroll_Update_Timer_Handle();
     void Scroll_Quick_TimeOut_Update_GUI();
-    void Quick_Scroll_Update_Timer_Flage();
+    //void Quick_Scroll_Update_Timer_Flage();
     void Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total);
 
 signals:
-    void Quick_Scroll_Slot(unsigned short  Receive_Diff_Data_Total);     //声明一个信号，不需要实现
+    void Quick_Scroll_Slot(unsigned short  Receive_Diff_Data_Total);     //声明一个信号，不需要实现 快滑叠加信号
 
 
 };

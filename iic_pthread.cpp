@@ -16,9 +16,27 @@
 #include <sys/types.h>
 #include <QMutex>
 #include <QQueue>
+#include <QTime>
+#include <QTimer>
 
 IIC_MyThread::IIC_MyThread(QObject *parent)
 {
+    Diff_Cur_Pos = 0;
+    Diff_Pre_Pos = 0;
+    Diff_Old_Pos = 0;
+
+    Diff_Cur_Neg = 0;
+    Diff_Pre_Neg = 0;
+    Diff_Old_Neg = 0;
+
+    Scroll_Allow_Times = 0;
+    IIC_Send_Dir_Flage = 0xFF;
+    Determine_Btn_Press = false;
+    Cancel_Btn_Press = false;
+    Determine_Pressd_Timer_Times = 0;
+    Cancel_Pressd_Timer_Times = 0;
+    Determine_Pressd_Out_Flage = 0;
+    Cancel_Pressd_Out_Flage = 0;
     this->setObjectName("IIC_MyThread");
 }
 
@@ -32,6 +50,7 @@ unsigned char Current_Press_Value = 0xFF;
 unsigned char Current_Previous_Press_Value = 0xFF;
 unsigned char Previous_Press_Value = 0xFF;
 unsigned char Old_Press_Value = 0xFF;
+unsigned char Current_Previous_Press_Button_Value = 0xFF;
 
 unsigned char Slow_Scroll_Change_Data = 0x00;
 unsigned short Emit_Diff_Value = 0x0000;
@@ -46,7 +65,16 @@ QQueue<char> Press_Value_Stored_Queue;
 
 #define  TOUCH_LOW_VALUE    0x02
 #define  TOUCH_HIGH_VALUE   0x62
-
+/*
+void IIC_MyThread::Pressd_Timer_Handle()
+{
+    if(Pressd_Timer->isActive() == true)
+    {
+        Pressd_Timer->stop();
+    }
+    Pressd_Timer_Out_Flage = 1;
+}
+*/
 void IIC_MyThread::run()
 {
     unsigned int res = 0, len = 0;
@@ -55,6 +83,9 @@ void IIC_MyThread::run()
     unsigned char buff[5] = {0, 0, 0, 0, 0};
     unsigned char Scroll_Quick_Dir_Flage = 0;
 
+    //Pressd_Timer = new QTimer();              //  线程  new QTimer()时不能加this；
+    //Pressd_Timer->setSingleShot(true);        //  设置单次计时
+    //connect(Pressd_Timer, SIGNAL(timeout()), this, SLOT(Pressd_Timer_Handle()));
 
 
     fd = open("/dev/i2c-0", O_RDWR);
@@ -64,199 +95,360 @@ void IIC_MyThread::run()
         //return -1;
     }
     res = ioctl(fd, I2C_SLAVE, (0x08));     //设置I2C从设备地址
-
+    QThread::msleep(200);
     while(1)
     {
         Current_Press_Value = read_slider(fd);
-        if((Current_Press_Value==255)&&(Current_Previous_Press_Value==255))  //在滑动区域
+        //qDebug()<<"I am Runing = "<<Current_Press_Value;
+
+        if((Current_Press_Value==255)&&(Current_Previous_Press_Button_Value==255))  //松开状态
         {
             Press_Negative_Value_Stored_Queue.clear();
             Press_Positive_Value_Stored_Queue.clear();
             Press_Value_Stored_Queue.clear();
             Emit_Diff_Value = 0;
-            Scroll_Quick_Dir_Flage = 0xFF;
+
+            Determine_Pressd_Timer_Times = 0;
+            Cancel_Pressd_Timer_Times = 0;
+            Determine_Pressd_Out_Flage = 0;
+            Cancel_Pressd_Out_Flage = 0;
+        }
+        Current_Previous_Press_Button_Value = Current_Press_Value;
+
+        if(Cancel_Pressd_Out_Flage == 1)
+        {
+            if((Current_Press_Value >= 1) && (Current_Press_Value <= 30))
+            {
+                //qDebug()<<"Cancel_Pressd_Timer_Times++";
+                Cancel_Pressd_Timer_Times++;
+                if(Cancel_Pressd_Timer_Times >= 50)
+                {
+                    Cancel_Btn_Press = true;
+                    qDebug()<<"Cancel_Btn_Press = true";
+                }
+            }
         }
 
+        if(Determine_Pressd_Out_Flage == 1)
+        {
+            if((Current_Press_Value >= 70)&&(Current_Press_Value <= 100))
+            {
+                //qDebug()<<"Determine_Pressd_Timer_Times++";
+                Determine_Pressd_Timer_Times++;
+                if(Determine_Pressd_Timer_Times >= 50)
+                {
+                    Determine_Btn_Press = true;
+                    qDebug()<<"Determine_Btn_Press = true";
+                }
+            }
+        }
 
         if(Current_Press_Value !=  Current_Previous_Press_Value)
         {
-        //按下
-        //if((Current_Press_Value >= 0x0F)&&(Current_Press_Value <= 0x55)&&(Current_Previous_Press_Value >= 0x0F)&&(Current_Previous_Press_Value <=0x55)&&(Previous_Press_Value>= 0x0F)&&(Previous_Press_Value <= 0x55)&&(Old_Press_Value >= 0x0F)&&(Old_Press_Value <=0x55))  //在滑动区域
-        if((Current_Press_Value >= TOUCH_LOW_VALUE)&&(Current_Press_Value <= TOUCH_HIGH_VALUE)&&(Current_Previous_Press_Value >= TOUCH_LOW_VALUE)&&(Current_Previous_Press_Value <=TOUCH_HIGH_VALUE)&&(Previous_Press_Value>= TOUCH_LOW_VALUE)&&(Previous_Press_Value <= TOUCH_HIGH_VALUE)&&(Old_Press_Value >= TOUCH_LOW_VALUE)&&(Old_Press_Value <=TOUCH_HIGH_VALUE))  //在滑动区域
-        {
-            Emit_Diff_Value = 0x8000;
-            if(((Current_Press_Value - Current_Previous_Press_Value)>=1)&&(((Current_Previous_Press_Value - Previous_Press_Value)>=0))&&((Previous_Press_Value - Old_Press_Value)>=0))
+            qDebug()<<"I am Runing = "<<Current_Press_Value;
+
+            if((Current_Press_Value != 255)&&(Current_Previous_Press_Value == 255)) // 原来松开    现在按下
             {
+                Scroll_Allow_Times = 0;
+                Emit_Diff_Value = 0x2000;  //突然按下 要停止所有刷新
                 Press_Negative_Value_Stored_Queue.clear();
-
-                if((Current_Press_Value - Current_Previous_Press_Value) >= 0)
-                {
-                    Emit_Diff_Value = 0x0000;
-                }
-                //Slow_Scroll_Change_Data = abs(Current_Press_Value - Current_Previous_Press_Value);
-                Slow_Scroll_Change_Data = Calute_Speed(Current_Press_Value, Current_Previous_Press_Value, Previous_Press_Value, Old_Press_Value);
-                if(Press_Positive_Value_Stored_Queue.size() < 8)
-                {
-                    Press_Positive_Value_Stored_Queue.enqueue(Slow_Scroll_Change_Data);
-                }
-                else if(Press_Positive_Value_Stored_Queue.size() >= 8)
-                {
-                    Press_Positive_Value_Stored_Queue.enqueue(Slow_Scroll_Change_Data);
-                    Press_Positive_Value_Stored_Queue.dequeue();
-                }
-                Emit_Diff_Value+= 0x100;
-                Emit_Diff_Value+= Slow_Scroll_Change_Data;
-                Scroll_Quick_Dir_Flage = 0;
-                //emit myslot(Emit_Diff_Value);
-            }
-            else if(((Current_Press_Value - Current_Previous_Press_Value)<=-1)&&(((Current_Previous_Press_Value - Previous_Press_Value)<=0))&&((Previous_Press_Value - Old_Press_Value)<=0))
-            {
                 Press_Positive_Value_Stored_Queue.clear();
-                if((Current_Press_Value - Current_Previous_Press_Value) <= 0)
-                {
-                    Emit_Diff_Value = 0x1000;
-                }
-                //Slow_Scroll_Change_Data = abs(Current_Press_Value - Current_Previous_Press_Value);
-                Slow_Scroll_Change_Data = Calute_Speed(Current_Press_Value, Current_Previous_Press_Value, Previous_Press_Value, Old_Press_Value);
-                if(Press_Negative_Value_Stored_Queue.size() < 8)
-                {
-                    Press_Negative_Value_Stored_Queue.enqueue(Slow_Scroll_Change_Data);
-                }
-                else if(Press_Negative_Value_Stored_Queue.size() >= 8)
-                {
-                    Press_Negative_Value_Stored_Queue.enqueue(Slow_Scroll_Change_Data);
-                    Press_Negative_Value_Stored_Queue.dequeue();
-                }
-                Emit_Diff_Value+= 0x100;
-                Emit_Diff_Value+= Slow_Scroll_Change_Data;
-                Scroll_Quick_Dir_Flage = 1;
-                //emit myslot(Emit_Diff_Value);
-            }
-            emit myslot(Emit_Diff_Value);
-            //printf("thread= %x \r\n", Current_Press_Value);
-        }
+                Press_Value_Stored_Queue.clear();
 
-        //松开  原来不是255按下   现在是255
-        if((Current_Press_Value ==255) &&(Current_Previous_Press_Value !=255)&&(Previous_Press_Value != 255)&&(Old_Press_Value != 255))
-        //if((Current_Press_Value ==255) &&(Current_Previous_Press_Value ==255)&&(Previous_Press_Value != 255)&&(Old_Press_Value != 255))
-        //if(((Current_Press_Value < 0x0F)||(Current_Press_Value > 0x55))&&((Current_Previous_Press_Value < 0x0F)||(Current_Previous_Press_Value > 0x55)) &&(Previous_Press_Value>= 0x0F)&&(Previous_Press_Value <= 0x55)&&(Old_Press_Value >= 0x0F)&&(Old_Press_Value <=0x55))  //在滑动区域
-        //if(((Current_Press_Value < 0x0F)||(Current_Press_Value > 0x55))||((Current_Previous_Press_Value < 0x0F)||(Current_Previous_Press_Value > 0x55)) &&(Previous_Press_Value>= 0x0F)&&(Previous_Press_Value <= 0x55)&&(Old_Press_Value >= 0x0F)&&(Old_Press_Value <=0x55))  //在滑动区域
-        {
-            printf("255  255--------------\r\n");
-            if((Press_Positive_Value_Stored_Queue.size() == 1)||(Press_Negative_Value_Stored_Queue.size() == 1))
-            {
-                if(Press_Positive_Value_Stored_Queue.size() == 1)
+                if( ((Current_Press_Value >= 1)&&(Current_Press_Value <= 30)) || ((Current_Press_Value >= 70)&&(Current_Press_Value <= 100)))
                 {
-                    Emit_Diff_Value = 0x0000;
-                    Press_Value_Stored_Queue = Press_Positive_Value_Stored_Queue;
-                }
-                else if(Press_Negative_Value_Stored_Queue.size() == 1)
-                {
-                    Emit_Diff_Value = 0x1000;
-                    Press_Value_Stored_Queue = Press_Negative_Value_Stored_Queue;
-                }
-                if(Press_Value_Stored_Queue[0] >= 4)
-                {
-                    Emit_Diff_Value += 0x400;  //慢滑
-                    Emit_Diff_Value += 0xFF;
-                    printf("慢滑1 = %x\r\n", Emit_Diff_Value);
-                    emit myslot(Emit_Diff_Value);
+                    Diff_Cur_Pos = 3;
+                    Diff_Pre_Pos = 2;
+                    Diff_Old_Pos = 1;
+
+                    Diff_Cur_Neg = -3;
+                    Diff_Pre_Neg = -2;
+                    Diff_Old_Neg = -1;
                 }
                 else
                 {
-                    Emit_Diff_Value += 0x400;  //快滑
-                    Emit_Diff_Value += Press_Value_Stored_Queue[0];
-                    printf("快滑1 = %x\r\n", Emit_Diff_Value);
-                    emit myslot(Emit_Diff_Value);
+                    Diff_Cur_Pos = 1;
+                    Diff_Pre_Pos = 0;
+                    Diff_Old_Pos = 0;
+
+                    Diff_Cur_Neg = -1;
+                    Diff_Pre_Neg = 0;
+                    Diff_Old_Neg = 0;
                 }
-                //采集一个暂不考虑
+
+
+                if((Current_Press_Value >= 1) && (Current_Press_Value <= 30))
+                {
+                    qDebug()<<"----press---left_btn_press---x:";
+                    Cancel_Pressd_Out_Flage = 1;
+                }
+                else if((Current_Press_Value >= 70) && (Current_Press_Value <= 100))
+                {
+                    qDebug()<<"----press---right_btn_press---x:";
+                    Determine_Pressd_Out_Flage = 1;
+                }
+                qDebug()<<"--Released--press----";
+                emit myslot(Emit_Diff_Value);
             }
-            else if((Press_Positive_Value_Stored_Queue.size() >= 2)||(Press_Negative_Value_Stored_Queue.size() >= 2))
+        //按下
+        //if((Current_Press_Value >= 0x0F)&&(Current_Press_Value <= 0x55)&&(Current_Previous_Press_Value >= 0x0F)&&(Current_Previous_Press_Value <=0x55)&&(Previous_Press_Value>= 0x0F)&&(Previous_Press_Value <= 0x55)&&(Old_Press_Value >= 0x0F)&&(Old_Press_Value <=0x55))  //在滑动区域
+        if((Current_Press_Value >= TOUCH_LOW_VALUE)&&(Current_Press_Value <= TOUCH_HIGH_VALUE)&&(Current_Previous_Press_Value >= TOUCH_LOW_VALUE)&&(Current_Previous_Press_Value <=TOUCH_HIGH_VALUE)&&(Previous_Press_Value>= TOUCH_LOW_VALUE)&&(Previous_Press_Value <= TOUCH_HIGH_VALUE)&&(Old_Press_Value >= TOUCH_LOW_VALUE)&&(Old_Press_Value <=TOUCH_HIGH_VALUE))  //在滑动区域
+        {     
+            if(Scroll_Allow_Times < 20)
             {
-                if(Press_Positive_Value_Stored_Queue.size() >= 2)
-                {
-                    Emit_Diff_Value = 0x0000;
-                    Press_Value_Stored_Queue = Press_Positive_Value_Stored_Queue;
-                }
-                else if(Press_Negative_Value_Stored_Queue.size() >= 2)
-                {
-                    Emit_Diff_Value = 0x1000;
-                    Press_Value_Stored_Queue = Press_Negative_Value_Stored_Queue;
-                }
+                Scroll_Allow_Times++;
+            }
 
-                if(Press_Value_Stored_Queue.size() < 8)
+            //if(Scroll_Allow_Times >= 20)
+             if((Determine_Btn_Press == false)&&(Cancel_Btn_Press == false))
+            {
+                if( ((Current_Press_Value >= 1)&&(Current_Press_Value <= 30)) || ((Current_Press_Value >= 70)&&(Current_Press_Value <= 100)))
                 {
-                    //qDebug()<<"< 8\r\n";
-                    Quick_Scroll_Change_Max = 0;
-                    for(int i=0; i<(Press_Value_Stored_Queue.size()-1); i++) // 相邻两个相加
+                    if((((Current_Press_Value - Current_Previous_Press_Value)>=5)&&(abs(Current_Previous_Press_Value - Previous_Press_Value)>=1))
+                    ||(((Current_Press_Value - Current_Previous_Press_Value)<=-5)&&(abs(Current_Previous_Press_Value - Previous_Press_Value)<=-1)))
                     {
-                        if((Press_Value_Stored_Queue[i] + Press_Value_Stored_Queue[i+1]) >= 5) // 快滑
-                        {
-                            Emit_Diff_Value += 0x400;
-                            Quick_Scroll_Change_Data = (Press_Value_Stored_Queue[i] + Press_Value_Stored_Queue[i+1]);
-                            if(Quick_Scroll_Change_Max < Quick_Scroll_Change_Data)
-                            {
-                                Quick_Scroll_Change_Max = Quick_Scroll_Change_Data;
-                            }
-                            Emit_Diff_Value += Quick_Scroll_Change_Max;
+                        qDebug()<<">=5 Button Flase----------------------------";
 
-                            printf("快滑2 = %x\r\n", Emit_Diff_Value);
-                            emit myslot(Emit_Diff_Value);
-                            break;
-                        }
+                        Determine_Pressd_Timer_Times = 0;
+                        Cancel_Pressd_Timer_Times = 0;
+                        Determine_Pressd_Out_Flage = 0;
+                        Cancel_Pressd_Out_Flage = 0;
+
+                        Determine_Btn_Press = false;
+                        Cancel_Btn_Press = false;
+                        Set_Diff_Value_Flage = 1;
+                        Diff_Cur_Pos = 1;
+                        Diff_Pre_Pos = 0;
+                        Diff_Old_Pos = 0;
+
+                        Diff_Cur_Neg = -1;
+                        Diff_Pre_Neg = 0;
+                        Diff_Old_Neg = 0;
                     }
-                    if((Emit_Diff_Value&0x400)< 0x400)  //慢滑松手
+                }/*
+                if((Current_Press_Value >30) && (Current_Press_Value < 70))
+                {
+                    qDebug()<<"40<Current_Press_Value>60  Button Flase---------------------------";
+
+                    Determine_Pressd_Timer_Times = 0;
+                    Cancel_Pressd_Timer_Times = 0;
+                    Determine_Pressd_Out_Flage = 0;
+                    Cancel_Pressd_Out_Flage = 0;
+
+                    Determine_Btn_Press = false;
+                    Cancel_Btn_Press = false;
+
+                    Set_Diff_Value_Flage = 1;
+                    Diff_Cur_Pos = 1;
+                    Diff_Pre_Pos = 0;
+                    Diff_Old_Pos = 0;
+
+                    Diff_Cur_Neg = -1;
+                    Diff_Pre_Neg = 0;
+                    Diff_Old_Neg = 0;
+                }
+                */
+                if(((Current_Press_Value - Current_Previous_Press_Value)>=Diff_Cur_Pos)&&(((Current_Previous_Press_Value - Previous_Press_Value)>=Diff_Pre_Pos))&&((Previous_Press_Value - Old_Press_Value)>=Diff_Old_Pos))
+                {
+                    Press_Negative_Value_Stored_Queue.clear();
+
+                    if((Current_Press_Value - Current_Previous_Press_Value) >= 0)
                     {
-                        Emit_Diff_Value += 0x400;
+                        Emit_Diff_Value = 0x0000;
+                        IIC_Send_Dir_Flage = 0;
+                    }
+                    //Slow_Scroll_Change_Data = abs(Current_Press_Value - Current_Previous_Press_Value);
+                    Slow_Scroll_Change_Data = Calute_Speed(Current_Press_Value, Current_Previous_Press_Value, Previous_Press_Value, Old_Press_Value);
+                    if(Press_Positive_Value_Stored_Queue.size() < 8)
+                    {
+                        Press_Positive_Value_Stored_Queue.enqueue(Slow_Scroll_Change_Data);
+                    }
+                    else if(Press_Positive_Value_Stored_Queue.size() >= 8)
+                    {
+                        Press_Positive_Value_Stored_Queue.enqueue(Slow_Scroll_Change_Data);
+                        Press_Positive_Value_Stored_Queue.dequeue();
+                    }
+                    Emit_Diff_Value+= 0x100;
+                    Emit_Diff_Value+= Slow_Scroll_Change_Data;
+                    //emit myslot(Emit_Diff_Value);
+                }
+                else if(((Current_Press_Value - Current_Previous_Press_Value)<=Diff_Cur_Neg)&&(((Current_Previous_Press_Value - Previous_Press_Value)<=Diff_Pre_Neg))&&((Previous_Press_Value - Old_Press_Value)<=Diff_Old_Neg))
+                {
+                    Press_Positive_Value_Stored_Queue.clear();
+                    if((Current_Press_Value - Current_Previous_Press_Value) <= 0)
+                    {
+                        Emit_Diff_Value = 0x1000;
+                        IIC_Send_Dir_Flage = 1;
+                    }
+                    //Slow_Scroll_Change_Data = abs(Current_Press_Value - Current_Previous_Press_Value);
+                    Slow_Scroll_Change_Data = Calute_Speed(Current_Press_Value, Current_Previous_Press_Value, Previous_Press_Value, Old_Press_Value);
+                    if(Press_Negative_Value_Stored_Queue.size() < 8)
+                    {
+                        Press_Negative_Value_Stored_Queue.enqueue(Slow_Scroll_Change_Data);
+                    }
+                    else if(Press_Negative_Value_Stored_Queue.size() >= 8)
+                    {
+                        Press_Negative_Value_Stored_Queue.enqueue(Slow_Scroll_Change_Data);
+                        Press_Negative_Value_Stored_Queue.dequeue();
+                    }
+                    Emit_Diff_Value+= 0x100;
+                    Emit_Diff_Value+= Slow_Scroll_Change_Data;
+                    //emit myslot(Emit_Diff_Value);
+                }
+                emit myslot(Emit_Diff_Value);
+                printf("emit myslot(%x)\r\n", Emit_Diff_Value);
+            }
+        }
+
+        //松开  原来不是255按下   现在是255
+        if((Current_Press_Value ==255) &&(Current_Previous_Press_Value != 255))
+        //if((Current_Press_Value ==255) &&(Current_Previous_Press_Value !=255)&&(Previous_Press_Value != 255)&&(Old_Press_Value != 255))
+        {
+            if((Determine_Btn_Press == false)&&(Cancel_Btn_Press == false))
+            {
+                printf("Btn Press == false \r\n");
+                if((Press_Positive_Value_Stored_Queue.size() == 1)||(Press_Negative_Value_Stored_Queue.size() == 1))
+                {
+                    if(Press_Positive_Value_Stored_Queue.size() == 1)                     //采集一个
+                    {
+                        Emit_Diff_Value = 0x0000;
+                        IIC_Send_Dir_Flage = 0;
+                        Press_Value_Stored_Queue = Press_Positive_Value_Stored_Queue;
+                    }
+                    else if(Press_Negative_Value_Stored_Queue.size() == 1)
+                    {
+                        Emit_Diff_Value = 0x1000;
+                        IIC_Send_Dir_Flage = 1;
+                        Press_Value_Stored_Queue = Press_Negative_Value_Stored_Queue;
+                    }
+                    if(Press_Value_Stored_Queue[0] <= 4)
+                    {
+                        Emit_Diff_Value += 0x400;  //慢滑
                         Emit_Diff_Value += 0xFF;
-                        printf("慢滑2 = %x\r\n", Emit_Diff_Value);
-                        emit myslot(Emit_Diff_Value);
-                    }
-                }
-                if(Press_Value_Stored_Queue.size() >= 8)
-                {
-                    for(int i=0; i<Press_Value_Stored_Queue.size()-2; i++)
-                    {
-                        Quick_Scroll_Change_Data+=Press_Value_Stored_Queue.dequeue();
-                    }
-                    qDebug()<<"8 == 8 "<<Quick_Scroll_Change_Data;
-                    if(Quick_Scroll_Change_Data >= 16)  //快滑松手
-                    {
-                        Emit_Diff_Value += 0x400;
-                        Quick_Scroll_Change_Data = Quick_Scroll_Change_Data - 12;
-                        Emit_Diff_Value = Quick_Scroll_Change_Data;
-                        printf("快滑8 = %x\r\n", Emit_Diff_Value);
+                        printf("慢滑1 = %x\r\n", Emit_Diff_Value);
                         emit myslot(Emit_Diff_Value);
                     }
                     else
                     {
-                        Emit_Diff_Value += 0x400;
-                        Emit_Diff_Value += 0xFF;
-                        printf("慢滑8 = %x\r\n", Emit_Diff_Value);
+                        Emit_Diff_Value += 0x400;  //快滑
+                        Emit_Diff_Value += Press_Value_Stored_Queue[0];
+                        printf("快滑1 = %x\r\n", Emit_Diff_Value);
                         emit myslot(Emit_Diff_Value);
                     }
                 }
-                Quick_Scroll_Change_Data = 0;
-                Press_Value_Stored_Queue.clear();
+                else if((Press_Positive_Value_Stored_Queue.size() >= 2)||(Press_Negative_Value_Stored_Queue.size() >= 2))
+                {
+                    if(Press_Positive_Value_Stored_Queue.size() >= 2)
+                    {
+                        Emit_Diff_Value = 0x0000;
+                        IIC_Send_Dir_Flage = 0;
+                        Press_Value_Stored_Queue = Press_Positive_Value_Stored_Queue;
+                    }
+                    else if(Press_Negative_Value_Stored_Queue.size() >= 2)
+                    {
+                        Emit_Diff_Value = 0x1000;
+                        IIC_Send_Dir_Flage = 1;
+                        Press_Value_Stored_Queue = Press_Negative_Value_Stored_Queue;
+                    }
+
+                    if(Press_Value_Stored_Queue.size() < 8)
+                    {
+                        //qDebug()<<"< 8\r\n";
+                        Quick_Scroll_Change_Max = 0;
+                        for(int i=0; i<(Press_Value_Stored_Queue.size()-1); i++) // 相邻两个相加
+                        {
+                            if((Press_Value_Stored_Queue[i] + Press_Value_Stored_Queue[i+1]) >= 5) // 快滑
+                            {
+                                Emit_Diff_Value += 0x400;
+                                Quick_Scroll_Change_Data = (Press_Value_Stored_Queue[i] + Press_Value_Stored_Queue[i+1]);
+                                if(Quick_Scroll_Change_Max < Quick_Scroll_Change_Data)
+                                {
+                                    Quick_Scroll_Change_Max = Quick_Scroll_Change_Data;
+                                }
+                                Emit_Diff_Value += Quick_Scroll_Change_Max;
+
+                                printf("快滑2 = %x\r\n", Emit_Diff_Value);
+                                emit myslot(Emit_Diff_Value);
+                                break;
+                            }
+                        }
+                        if((Emit_Diff_Value&0x400)< 0x400)  //慢滑松手
+                        {
+                            Emit_Diff_Value += 0x400;
+                            Emit_Diff_Value += 0xFF;
+                            printf("慢滑2 = %x\r\n", Emit_Diff_Value);
+                            emit myslot(Emit_Diff_Value);
+                        }
+                    }
+                    if(Press_Value_Stored_Queue.size() >= 8)
+                    {
+                        for(int i=0; i<Press_Value_Stored_Queue.size()-2; i++)
+                        {
+                            Quick_Scroll_Change_Data+=Press_Value_Stored_Queue.dequeue();
+                        }
+                        qDebug()<<"8 == 8 "<<Quick_Scroll_Change_Data;
+                        if(Quick_Scroll_Change_Data >= 16)  //快滑松手
+                        {
+                            Emit_Diff_Value += 0x400;
+                            Quick_Scroll_Change_Data = Quick_Scroll_Change_Data - 12;
+                            Emit_Diff_Value = Quick_Scroll_Change_Data;
+                            printf("快滑8 = %x\r\n", Emit_Diff_Value);
+                            emit myslot(Emit_Diff_Value);
+                        }
+                        else
+                        {
+                            Emit_Diff_Value += 0x400;
+                            Emit_Diff_Value += 0xFF;
+                            printf("慢滑8 = %x\r\n", Emit_Diff_Value);
+                            emit myslot(Emit_Diff_Value);
+                        }
+                    }
+                    Quick_Scroll_Change_Data = 0;
+                    Press_Value_Stored_Queue.clear();
+                }
+                else  //慢滑松手    //记录上一次方向
+                {
+                    if((Press_Positive_Value_Stored_Queue.size() == 0)&&(Press_Negative_Value_Stored_Queue.size() == 0))
+                    {
+                        Press_Positive_Value_Stored_Queue.clear();
+                        Press_Negative_Value_Stored_Queue.clear();
+
+                        if(IIC_Send_Dir_Flage == 0)       // +++
+                        {
+                            Emit_Diff_Value = 0x0000;
+                        }
+                        else if(IIC_Send_Dir_Flage == 1)  // ---
+                        {
+                            Emit_Diff_Value = 0x1000;
+                        }
+                        Emit_Diff_Value += 0x400;
+                        Emit_Diff_Value += 0xFF;
+                    }
+                    printf("慢滑 Last_Dir\r\n");
+                    emit myslot(Emit_Diff_Value);
+                }
             }
-            else  //慢滑松手  靠近最近那个
+            else if(Determine_Btn_Press == true)  // //突然按下 要停止所有刷新
+            {    
+                qDebug()<<"Determine_Btn_Press";
+                Emit_Diff_Value = 0x4000;
+                emit myslot(Emit_Diff_Value);   //确定
+                Determine_Btn_Press = false;               
+                Determine_Pressd_Timer_Times = 0;
+                Cancel_Pressd_Timer_Times = 0;
+                Determine_Pressd_Out_Flage = 0;
+                Cancel_Pressd_Out_Flage = 0;
+            }
+            else if(Cancel_Btn_Press == true)   //突然按下 要停止所有刷新
             {
-                if(Press_Positive_Value_Stored_Queue.size() >0)
-                {
-                    Press_Positive_Value_Stored_Queue.clear();
-                    Emit_Diff_Value = 0x0000;
-                    Emit_Diff_Value += 0x400;
-                    Emit_Diff_Value += 0xFF;
-                    emit myslot(Emit_Diff_Value);
-                }
-                if(Press_Negative_Value_Stored_Queue.size() >0)
-                {
-                    Press_Negative_Value_Stored_Queue.clear();
-                    Emit_Diff_Value = 0x1000;
-                    Emit_Diff_Value += 0x400;
-                    Emit_Diff_Value += 0xFF;
-                    emit myslot(Emit_Diff_Value);
-                }
+                 qDebug()<<"Cancel_Btn_Press";
+                 Emit_Diff_Value = 0x8000;
+                 emit myslot(Emit_Diff_Value);  //取消
+                 Cancel_Btn_Press = false;              
+                 Determine_Pressd_Timer_Times = 0;
+                 Cancel_Pressd_Timer_Times = 0;
+                 Determine_Pressd_Out_Flage = 0;
+                 Cancel_Pressd_Out_Flage = 0;
             }
         }
 
