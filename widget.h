@@ -76,8 +76,10 @@ private:
     volatile unsigned char Quick_Scroll_Update_Flage;
     volatile unsigned char Widget_Page_Switch;
 
-    unsigned char Total_Page = 0;
-    unsigned char Current_Page = 0;
+    unsigned char Total_Page;
+    volatile unsigned char Previous_Page;
+    volatile unsigned char Current_Page;
+
     QString String_Display;
     QTimer *Slow_Scroll_Timer;   //慢滑定时器
     QTimer *Release_Timeout;
@@ -103,10 +105,10 @@ private:
 
     QSlider *Slider_p;            //滑动条
 
-    //Led Shock_Motor;
+    Led Shock_Motor;
 private slots:
 
-    //void Motor_Shake_Slot_Timer_Handler();
+    void Motor_Shake_Slot_Timer_Handler();
 
     void Quick_Scroll_Update_Timer_Slot_Handle();
 

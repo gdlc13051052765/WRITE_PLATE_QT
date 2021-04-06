@@ -65,6 +65,9 @@ QQueue<char> Press_Value_Stored_Queue;
 
 #define  TOUCH_LOW_VALUE    0x02
 #define  TOUCH_HIGH_VALUE   0x62
+
+#define  TOUCH_PRESSED_TIME   5     // 5 * 5    25Ms
+
 /*
 void IIC_MyThread::Pressd_Timer_Handle()
 {
@@ -95,12 +98,11 @@ void IIC_MyThread::run()
         //return -1;
     }
     res = ioctl(fd, I2C_SLAVE, (0x08));     //设置I2C从设备地址
-    QThread::msleep(200);
+    QThread::msleep(500);
     while(1)
     {
         Current_Press_Value = read_slider(fd);
         //qDebug()<<"I am Runing = "<<Current_Press_Value;
-
         if((Current_Press_Value==255)&&(Current_Previous_Press_Button_Value==255))  //松开状态
         {
             Press_Negative_Value_Stored_Queue.clear();
@@ -117,13 +119,15 @@ void IIC_MyThread::run()
 
         if(Cancel_Pressd_Out_Flage == 1)
         {
-            if((Current_Press_Value >= 1) && (Current_Press_Value <= 30))
+            if((Current_Press_Value >= 1) && (Current_Press_Value <= 20))
             {
                 //qDebug()<<"Cancel_Pressd_Timer_Times++";
                 Cancel_Pressd_Timer_Times++;
-                if(Cancel_Pressd_Timer_Times >= 50)
+                if(Cancel_Pressd_Timer_Times >= TOUCH_PRESSED_TIME)
                 {
                     Cancel_Btn_Press = true;
+                    Cancel_Pressd_Timer_Times = 0;
+                    Cancel_Pressd_Out_Flage = 0;
                     qDebug()<<"Cancel_Btn_Press = true";
                 }
             }
@@ -131,13 +135,15 @@ void IIC_MyThread::run()
 
         if(Determine_Pressd_Out_Flage == 1)
         {
-            if((Current_Press_Value >= 70)&&(Current_Press_Value <= 100))
+            if((Current_Press_Value >= 80)&&(Current_Press_Value <= 100))
             {
                 //qDebug()<<"Determine_Pressd_Timer_Times++";
                 Determine_Pressd_Timer_Times++;
-                if(Determine_Pressd_Timer_Times >= 50)
+                if(Determine_Pressd_Timer_Times >= TOUCH_PRESSED_TIME)
                 {
                     Determine_Btn_Press = true;
+                    Determine_Pressd_Timer_Times = 0;
+                    Determine_Pressd_Out_Flage = 0;
                     qDebug()<<"Determine_Btn_Press = true";
                 }
             }
@@ -155,14 +161,14 @@ void IIC_MyThread::run()
                 Press_Positive_Value_Stored_Queue.clear();
                 Press_Value_Stored_Queue.clear();
 
-                if( ((Current_Press_Value >= 1)&&(Current_Press_Value <= 30)) || ((Current_Press_Value >= 70)&&(Current_Press_Value <= 100)))
+                if( ((Current_Press_Value >= 1)&&(Current_Press_Value <= 20)) || ((Current_Press_Value >= 80)&&(Current_Press_Value <= 100)))
                 {
-                    Diff_Cur_Pos = 3;
-                    Diff_Pre_Pos = 2;
+                    Diff_Cur_Pos = 1;
+                    Diff_Pre_Pos = 1;
                     Diff_Old_Pos = 1;
 
-                    Diff_Cur_Neg = -3;
-                    Diff_Pre_Neg = -2;
+                    Diff_Cur_Neg = -1;
+                    Diff_Pre_Neg = -1;
                     Diff_Old_Neg = -1;
                 }
                 else
@@ -176,13 +182,12 @@ void IIC_MyThread::run()
                     Diff_Old_Neg = 0;
                 }
 
-
-                if((Current_Press_Value >= 1) && (Current_Press_Value <= 30))
+                if((Current_Press_Value >= 1) && (Current_Press_Value <= 20))
                 {
                     qDebug()<<"----press---left_btn_press---x:";
                     Cancel_Pressd_Out_Flage = 1;
                 }
-                else if((Current_Press_Value >= 70) && (Current_Press_Value <= 100))
+                else if((Current_Press_Value >= 80) && (Current_Press_Value <= 100))
                 {
                     qDebug()<<"----press---right_btn_press---x:";
                     Determine_Pressd_Out_Flage = 1;
@@ -194,18 +199,14 @@ void IIC_MyThread::run()
         //if((Current_Press_Value >= 0x0F)&&(Current_Press_Value <= 0x55)&&(Current_Previous_Press_Value >= 0x0F)&&(Current_Previous_Press_Value <=0x55)&&(Previous_Press_Value>= 0x0F)&&(Previous_Press_Value <= 0x55)&&(Old_Press_Value >= 0x0F)&&(Old_Press_Value <=0x55))  //在滑动区域
         if((Current_Press_Value >= TOUCH_LOW_VALUE)&&(Current_Press_Value <= TOUCH_HIGH_VALUE)&&(Current_Previous_Press_Value >= TOUCH_LOW_VALUE)&&(Current_Previous_Press_Value <=TOUCH_HIGH_VALUE)&&(Previous_Press_Value>= TOUCH_LOW_VALUE)&&(Previous_Press_Value <= TOUCH_HIGH_VALUE)&&(Old_Press_Value >= TOUCH_LOW_VALUE)&&(Old_Press_Value <=TOUCH_HIGH_VALUE))  //在滑动区域
         {     
-            if(Scroll_Allow_Times < 20)
-            {
-                Scroll_Allow_Times++;
-            }
 
             //if(Scroll_Allow_Times >= 20)
-             if((Determine_Btn_Press == false)&&(Cancel_Btn_Press == false))
+            //if((Determine_Btn_Press == false)&&(Cancel_Btn_Press == false))
             {
-                if( ((Current_Press_Value >= 1)&&(Current_Press_Value <= 30)) || ((Current_Press_Value >= 70)&&(Current_Press_Value <= 100)))
+                if( ((Current_Press_Value >= 1)&&(Current_Press_Value <= 20)) || ((Current_Press_Value >= 80)&&(Current_Press_Value <= 100)))
                 {
-                    if((((Current_Press_Value - Current_Previous_Press_Value)>=5)&&(abs(Current_Previous_Press_Value - Previous_Press_Value)>=1))
-                    ||(((Current_Press_Value - Current_Previous_Press_Value)<=-5)&&(abs(Current_Previous_Press_Value - Previous_Press_Value)<=-1)))
+                    if((((Current_Press_Value - Current_Previous_Press_Value)>=Diff_Cur_Pos)&&(((Current_Previous_Press_Value - Previous_Press_Value)>=Diff_Pre_Pos))&&((Previous_Press_Value - Old_Press_Value)>=Diff_Old_Pos))
+                    ||(((Current_Press_Value - Current_Previous_Press_Value)<=Diff_Cur_Neg)&&(((Current_Previous_Press_Value - Previous_Press_Value)<=Diff_Pre_Neg))&&((Previous_Press_Value - Old_Press_Value)<=Diff_Old_Neg)))
                     {
                         qDebug()<<">=5 Button Flase----------------------------";
 
@@ -216,6 +217,7 @@ void IIC_MyThread::run()
 
                         Determine_Btn_Press = false;
                         Cancel_Btn_Press = false;
+
                         Set_Diff_Value_Flage = 1;
                         Diff_Cur_Pos = 1;
                         Diff_Pre_Pos = 0;
@@ -225,10 +227,11 @@ void IIC_MyThread::run()
                         Diff_Pre_Neg = 0;
                         Diff_Old_Neg = 0;
                     }
-                }/*
-                if((Current_Press_Value >30) && (Current_Press_Value < 70))
+                }
+
+                if(((Current_Press_Value - Current_Previous_Press_Value)>=Diff_Cur_Pos)&&(((Current_Previous_Press_Value - Previous_Press_Value)>=Diff_Pre_Pos))&&((Previous_Press_Value - Old_Press_Value)>=Diff_Old_Pos))
                 {
-                    qDebug()<<"40<Current_Press_Value>60  Button Flase---------------------------";
+                    Press_Negative_Value_Stored_Queue.clear();
 
                     Determine_Pressd_Timer_Times = 0;
                     Cancel_Pressd_Timer_Times = 0;
@@ -237,20 +240,6 @@ void IIC_MyThread::run()
 
                     Determine_Btn_Press = false;
                     Cancel_Btn_Press = false;
-
-                    Set_Diff_Value_Flage = 1;
-                    Diff_Cur_Pos = 1;
-                    Diff_Pre_Pos = 0;
-                    Diff_Old_Pos = 0;
-
-                    Diff_Cur_Neg = -1;
-                    Diff_Pre_Neg = 0;
-                    Diff_Old_Neg = 0;
-                }
-                */
-                if(((Current_Press_Value - Current_Previous_Press_Value)>=Diff_Cur_Pos)&&(((Current_Previous_Press_Value - Previous_Press_Value)>=Diff_Pre_Pos))&&((Previous_Press_Value - Old_Press_Value)>=Diff_Old_Pos))
-                {
-                    Press_Negative_Value_Stored_Queue.clear();
 
                     if((Current_Press_Value - Current_Previous_Press_Value) >= 0)
                     {
@@ -275,6 +264,15 @@ void IIC_MyThread::run()
                 else if(((Current_Press_Value - Current_Previous_Press_Value)<=Diff_Cur_Neg)&&(((Current_Previous_Press_Value - Previous_Press_Value)<=Diff_Pre_Neg))&&((Previous_Press_Value - Old_Press_Value)<=Diff_Old_Neg))
                 {
                     Press_Positive_Value_Stored_Queue.clear();
+
+                    Determine_Pressd_Timer_Times = 0;
+                    Cancel_Pressd_Timer_Times = 0;
+                    Determine_Pressd_Out_Flage = 0;
+                    Cancel_Pressd_Out_Flage = 0;
+
+                    Determine_Btn_Press = false;
+                    Cancel_Btn_Press = false;
+
                     if((Current_Press_Value - Current_Previous_Press_Value) <= 0)
                     {
                         Emit_Diff_Value = 0x1000;

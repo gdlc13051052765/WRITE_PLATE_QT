@@ -15,6 +15,7 @@
 #include <QGraphicsProxyWidget>
 #include "led.h"
 
+#define   MOTOR_SHAKE_MS                    100
 
 #define   SLOW_SCROLL_RELEASED_UPDATE_MS    50
 
@@ -81,6 +82,7 @@ Widget::Widget(QWidget *parent): QWidget(parent)
 {
     Total_Page = 3;
     Current_Page = 0;
+    Previous_Page = 0;
     Widget_Page_Switch = 0;
 
     Button_Determine_list.append("color:white");                         // 前景色
@@ -170,8 +172,8 @@ Widget::Widget(QWidget *parent): QWidget(parent)
     //itemRealH = fm.height()*20/19 + itemIntervalH;  //计算实际间隔   //菜单实际间隔（菜单字符宽度+间隔）
     itemRealH = 0;
 
-    //Motor_Shake_Slot_Timer = new QTimer(this);          //  震动电机      OK
-    //connect(Motor_Shake_Slot_Timer, SIGNAL(timeout()), this, SLOT(Motor_Shake_Slot_Timer_Handler()));
+    Motor_Shake_Slot_Timer = new QTimer(this);          //  震动电机      OK
+    connect(Motor_Shake_Slot_Timer, SIGNAL(timeout()), this, SLOT(Motor_Shake_Slot_Timer_Handler()));
 
 
     Quick_Scroll_Slot_Timer = new QTimer(this);       //  快速滑动
@@ -207,6 +209,16 @@ Widget::Widget(QWidget *parent): QWidget(parent)
 Widget::~Widget()
 {
 
+}
+
+void Widget::Motor_Shake_Slot_Timer_Handler()
+{
+    if(Motor_Shake_Slot_Timer->isActive() == true)
+    {
+        Motor_Shake_Slot_Timer->stop();
+    }
+
+    Shock_Motor.Led_Off();
 }
 
 
@@ -409,7 +421,6 @@ void Widget::paintEvent(QPaintEvent *)
         {
             Widget_Page_Switch = 1;
 
-
             String_Display.clear();
             String_Display = menuList.at(selectItemIndex);
             //qDebug()<<"selectItemIndex = "<<selectItemIndex;
@@ -461,7 +472,7 @@ void Widget::paintEvent(QPaintEvent *)
     //  0  1   界面刷新
     if((Current_Page == 0)||(Current_Page == 1))
     {
-        qDebug()<<"Current_Page 0  1 selectItemIndex = "<<selectItemIndex<<Last_Update_GUI;
+        //qDebug()<<"Current_Page 0  1 selectItemIndex = "<<selectItemIndex<<Last_Update_GUI;
 
         if(Current_Page == 0)
         {
@@ -784,7 +795,6 @@ void Widget::paintEvent(QPaintEvent *)
                         pen.setColor(QColor(77+5*j,77+5*j,77+5*j));
                         p.setPen(pen);
 
-
                         if(Current_Page == 0)
                         Write_Post =  8 +(((FRAME-1)/2) - Add_Step_By_Step)*12;
                         if(Current_Page == 1)
@@ -1007,6 +1017,8 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
             if(selectItemIndex > 0)
             {
                 selectItemIndex--;
+                Shock_Motor.Led_On();
+                Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
                 //Slider_p->setValue(totalItemNum-1-selectItemIndex);
                 Add_Step_By_Step = FRAME;
                 Last_Update_GUI = 1;
@@ -1016,7 +1028,6 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
         {
             Add_Step_By_Step = FRAME;
             Last_Update_GUI = 1;
-
         }
     }
     else if(Scroll_Dir == 0x02)
@@ -1029,6 +1040,8 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
             if(selectItemIndex < (totalItemNum-1))
             {
                 selectItemIndex++;
+                Shock_Motor.Led_On();
+                Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
                 //Slider_p->setValue(totalItemNum-1-selectItemIndex);
                 Add_Step_By_Step = FRAME;
                 Last_Update_GUI = 1;
@@ -1039,7 +1052,6 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
         {
             Add_Step_By_Step = FRAME;
             Last_Update_GUI = 1;
-
         }
     }
 
@@ -1065,17 +1077,7 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
         }
     }
 }
-/*
-void Widget::Motor_Shake_Slot_Timer_Handler()
-{
-    if(Motor_Shake_Slot_Timer->isActive() == true)
-    {
-        Motor_Shake_Slot_Timer->stop();
-    }
 
-    Shock_Motor.Led_Off();
-}
-*/
 //慢滑松手  靠近最近的那个
 void Widget::Release_TimeOut_Update_GUI()
 {
@@ -1137,6 +1139,8 @@ void Widget::Release_Slow_Dir_TimeOut_Update_GUI()
             if(selectItemIndex > 0)
             {
                 selectItemIndex--;
+                Shock_Motor.Led_On();
+                Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
                 //Slider_p->setValue(totalItemNum-1-selectItemIndex);
                 Add_Step_By_Step = FRAME;
                 Last_Update_GUI = 1;
@@ -1160,6 +1164,8 @@ void Widget::Release_Slow_Dir_TimeOut_Update_GUI()
             if(selectItemIndex < (totalItemNum-1))
             {
                 selectItemIndex++;
+                Shock_Motor.Led_On();
+                Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
                 //Slider_p->setValue(totalItemNum-1-selectItemIndex);
                 Add_Step_By_Step = FRAME;
                 Last_Update_GUI = 1;
@@ -1200,7 +1206,6 @@ void Widget::Release_Slow_Dir_TimeOut_Update_GUI()
 //慢滑松手   根据方向  位置   来决定滑动
 void Widget::Release_Slow_Dir_Near_Update_GUI()
 {
-
     //                         3                              7
     if((Add_Step_By_Step >= (FRAME/2)) && (Add_Step_By_Step < FRAME))       //6  5  4  3   靠近
     {
@@ -1250,6 +1255,8 @@ void Widget::Slow_Scroll_Timer_Handle()
             if(selectItemIndex > 0)
             {
                 selectItemIndex--;
+                Shock_Motor.Led_On();
+                Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
                 //Slider_p->setValue(totalItemNum-1-selectItemIndex);
                 Add_Step_By_Step = FRAME;
                 Last_Update_GUI = 1;
@@ -1273,6 +1280,8 @@ void Widget::Slow_Scroll_Timer_Handle()
             if(selectItemIndex < (totalItemNum-1))
             {
                 selectItemIndex++;
+                Shock_Motor.Led_On();
+                Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
                 //Slider_p->setValue(totalItemNum-1-selectItemIndex);
                 Add_Step_By_Step = FRAME;
                 Last_Update_GUI = 1;
@@ -1304,7 +1313,7 @@ void Widget::Slow_Scroll_Timer_Handle()
 }
 
 
-
+//    快滑
 void Widget:: Quick_Scroll_Update_Timer_Slot_Handle()
 {
     if((selectItemIndex == 0)&&(Scroll_Dir == 1))//最后一条不可以滑动
@@ -1396,17 +1405,19 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
         {                          // 3 - 1
             if(Current_Page < (Total_Page-1))
             {
-                Current_Page++; // 0   1   2
+                Current_Page++; //    1   2
             }
 
             if(Current_Page >= (Total_Page-1))
             {
                 Current_Page = Total_Page-1;
             }
-
-            Widget_Page_Switch = 0;
-            //repaint();
-            update();
+            if(Current_Page != Previous_Page)
+            {
+                Widget_Page_Switch = 0;
+                update();
+                Previous_Page = Current_Page;
+            }
         }
         else if((Receive_Diff_Data_Total == 0x8000)&& ((Current_Page == 1)||(Current_Page == 2))) //取消
         {
@@ -1418,10 +1429,12 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
             {
                Current_Page = 0;
             }
-            Widget_Page_Switch = 0;
-            //repaint();
-            update();
-
+            if(Current_Page != Previous_Page)
+            {
+                Widget_Page_Switch = 0;
+                update();
+                Previous_Page = Current_Page;
+            }
         }
         else if((Receive_Diff_Data_Total > 0x00)&&(Receive_Diff_Data_Total < 0x2000)&&((Current_Page == 0)||(Current_Page == 1)))
         {
@@ -1478,7 +1491,7 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
                 else if(Receive_Diff_Data < 0xFF)
                 {
                     qDebug()<<"quick 松手"<<Receive_Diff_Data;
-                    Scroll_Times = (Receive_Diff_Data*totalItemNum/10)*4;
+                    Scroll_Times = (Receive_Diff_Data*totalItemNum/10)*2;
 
                     if(Scroll_Times <= 5 )
                     {
