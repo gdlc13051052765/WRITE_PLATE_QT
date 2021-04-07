@@ -10,7 +10,7 @@
 #include <QList>
 #include <QQueue>
 #include "led.h"
-
+#include "music.h"
 
 extern QMutex mutex;
 extern volatile unsigned char Current_Read_Press_Value;
@@ -106,6 +106,9 @@ private:
     QSlider *Slider_p;            //滑动条
 
     Led Shock_Motor;
+    Music * p_Music_Alarm;
+
+
 private slots:
 
     void Motor_Shake_Slot_Timer_Handler();

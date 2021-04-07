@@ -18,8 +18,6 @@ int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
 
-
-
     Widget w;
 
     int index = QFontDatabase::addApplicationFont("/home/HYQiHei-65S.ttf");

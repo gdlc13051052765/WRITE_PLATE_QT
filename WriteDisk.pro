@@ -5,7 +5,7 @@
 #-------------------------------------------------
 
 QT       += core gui
-
+QT       += multimedia
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 TARGET = WriteDisk
@@ -16,10 +16,12 @@ SOURCES += main.cpp\
         widget.cpp \
     iic_pthread.cpp \
     page_pthread.cpp \
-    led.cpp
+    led.cpp \
+    music.cpp
 
 HEADERS  += widget.h \
     i2c-dev.h \
     iic_pthread.h \
     page_pthread.h \
-    led.h
+    led.h \
+    music.h

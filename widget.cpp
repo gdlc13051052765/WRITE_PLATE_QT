@@ -14,6 +14,8 @@
 #include <QGraphicsView>
 #include <QGraphicsProxyWidget>
 #include "led.h"
+#include <QSound>
+
 
 #define   MOTOR_SHAKE_MS                    100
 
@@ -135,7 +137,7 @@ Widget::Widget(QWidget *parent): QWidget(parent)
 
     Quick_Scroll_Period = 0;
     Scroll_Times = 0;
-
+    p_Music_Alarm = new Music();
     Slider_p =new QSlider(this);
     Slider_p->setOrientation(Qt::Vertical);
     Slider_p->setGeometry (752, 21, 6, 373);
@@ -1017,8 +1019,10 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
             if(selectItemIndex > 0)
             {
                 selectItemIndex--;
-                Shock_Motor.Led_On();
-                Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
+                //QSound::play("/home/Wolf/Alarm.wav");
+                //p_Music_Alarm->Play_Alarm_Music();
+                //Shock_Motor.Led_On();
+                //Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
                 //Slider_p->setValue(totalItemNum-1-selectItemIndex);
                 Add_Step_By_Step = FRAME;
                 Last_Update_GUI = 1;
@@ -1040,8 +1044,10 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
             if(selectItemIndex < (totalItemNum-1))
             {
                 selectItemIndex++;
-                Shock_Motor.Led_On();
-                Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
+                //QSound::play("/home/Wolf/Alarm.wav");
+                //p_Music_Alarm->Play_Alarm_Music();
+                //Shock_Motor.Led_On();
+                //Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
                 //Slider_p->setValue(totalItemNum-1-selectItemIndex);
                 Add_Step_By_Step = FRAME;
                 Last_Update_GUI = 1;
@@ -1139,8 +1145,10 @@ void Widget::Release_Slow_Dir_TimeOut_Update_GUI()
             if(selectItemIndex > 0)
             {
                 selectItemIndex--;
-                Shock_Motor.Led_On();
-                Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
+                //QSound::play("/home/Wolf/Alarm.wav");
+                //p_Music_Alarm->Play_Alarm_Music();
+                //Shock_Motor.Led_On();
+                //Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
                 //Slider_p->setValue(totalItemNum-1-selectItemIndex);
                 Add_Step_By_Step = FRAME;
                 Last_Update_GUI = 1;
@@ -1164,8 +1172,10 @@ void Widget::Release_Slow_Dir_TimeOut_Update_GUI()
             if(selectItemIndex < (totalItemNum-1))
             {
                 selectItemIndex++;
-                Shock_Motor.Led_On();
-                Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
+                //QSound::play("/home/Wolf/Alarm.wav");
+                //p_Music_Alarm->Play_Alarm_Music();
+                //Shock_Motor.Led_On();
+                //Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
                 //Slider_p->setValue(totalItemNum-1-selectItemIndex);
                 Add_Step_By_Step = FRAME;
                 Last_Update_GUI = 1;
@@ -1255,8 +1265,10 @@ void Widget::Slow_Scroll_Timer_Handle()
             if(selectItemIndex > 0)
             {
                 selectItemIndex--;
-                Shock_Motor.Led_On();
-                Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
+                //QSound::play("/home/Wolf/Alarm.wav");
+                //p_Music_Alarm->Play_Alarm_Music();
+                //Shock_Motor.Led_On();
+                //Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
                 //Slider_p->setValue(totalItemNum-1-selectItemIndex);
                 Add_Step_By_Step = FRAME;
                 Last_Update_GUI = 1;
@@ -1280,8 +1292,10 @@ void Widget::Slow_Scroll_Timer_Handle()
             if(selectItemIndex < (totalItemNum-1))
             {
                 selectItemIndex++;
-                Shock_Motor.Led_On();
-                Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
+                //QSound::play("/home/Wolf/Alarm.wav");
+                //p_Music_Alarm->Play_Alarm_Music();
+                //Shock_Motor.Led_On();
+                //Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
                 //Slider_p->setValue(totalItemNum-1-selectItemIndex);
                 Add_Step_By_Step = FRAME;
                 Last_Update_GUI = 1;
@@ -1406,6 +1420,10 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
             if(Current_Page < (Total_Page-1))
             {
                 Current_Page++; //    1   2
+                //QSound::play("/home/Wolf/Alarm.wav");
+                //p_Music_Alarm->Play_Alarm_Music();
+                //Shock_Motor.Led_On();
+                //Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
             }
 
             if(Current_Page >= (Total_Page-1))
@@ -1423,7 +1441,11 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
         {
             if(Current_Page > 0)
             {
-                Current_Page--; // 2   1   0
+                Current_Page--; // 2   1
+                //QSound::play("/home/Wolf/Alarm.wav");
+                //p_Music_Alarm->Play_Alarm_Music();
+                //Shock_Motor.Led_On();
+                //Motor_Shake_Slot_Timer->start(MOTOR_SHAKE_MS);
             }
             if(Current_Page <= 0)
             {
