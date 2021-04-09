@@ -387,9 +387,9 @@ void IIC_MyThread::run()
                         qDebug()<<"8 == 8 "<<Quick_Scroll_Change_Data;
                         if(Quick_Scroll_Change_Data >= 16)  //快滑松手
                         {
-                            Emit_Diff_Value += 0x400;
                             Quick_Scroll_Change_Data = Quick_Scroll_Change_Data - 12;
-                            Emit_Diff_Value = Quick_Scroll_Change_Data;
+                            Emit_Diff_Value += 0x400;
+                            Emit_Diff_Value += Quick_Scroll_Change_Data;
                             printf("快滑8 = %x\r\n", Emit_Diff_Value);
                             emit myslot(Emit_Diff_Value);
                         }

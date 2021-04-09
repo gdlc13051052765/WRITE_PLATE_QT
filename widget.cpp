@@ -86,6 +86,8 @@ Widget::Widget(QWidget *parent): QWidget(parent)
     Current_Page = 0;
     Previous_Page = 0;
     Widget_Page_Switch = 0;
+    Quick_Add_Step = 1;
+    Scroll_Quick_Flage = 0;
 
     Button_Determine_list.append("color:white");                         // 前景色
     Button_Determine_list.append("background-color:rgb(167,203,74)");    // 背景色
@@ -131,8 +133,10 @@ Widget::Widget(QWidget *parent): QWidget(parent)
     //High_Scroll_Flage = 0;
 
     //Is_Speed_Low_Scroll = 0;
-    Last_Update_GUI = 1;
+    Release_Quick_TimeOut_Flage = 0;
 
+    Last_Update_GUI = 1;
+    Alarm_Flage = 1;
     Touchpad_Flage = 0;
 
     Quick_Scroll_Period = 0;
@@ -252,6 +256,8 @@ void Widget::paintEvent(QPaintEvent *)
         {
             Widget_Page_Switch = 1;
             menuList.clear();
+            Menu_Spell_List.clear();
+            Menu_Spell_Display_List.clear();
             menuList<<"周一早餐"<<"周一午餐"<<"周二早餐"<<"周二午餐"<<"周三早餐"<<"周三午餐" <<"周四早餐" <<"周四午餐"<< "周五早餐"<<"周五晚餐";
             totalItemNum = menuList.length();
     
@@ -303,7 +309,7 @@ void Widget::paintEvent(QPaintEvent *)
         itemFont.setPointSize(Current_FontSize);
         p.setFont(itemFont);
         p.drawText(716,  440,  "确定");
-        qDebug()<<"(Current_Page == 0)";
+        //qDebug()<<"(Current_Page == 0)";
 
     }
     else if(Current_Page == 1)
@@ -311,7 +317,10 @@ void Widget::paintEvent(QPaintEvent *)
         if(Widget_Page_Switch == 0)
         {
             Widget_Page_Switch = 1;
+
             menuList.clear();
+            Menu_Spell_List.clear();
+            Menu_Spell_Display_List.clear();
             menuList<<"白菜花"<<"白菜粉条"<<"白菜蛋花"<<"白菜肉片"<<"白菜黄瓜"<<"白菜萝卜"<<"菜花粉条"<<"菜花黄瓜"<<"菜花肉片"
                     <<"菜花"
                     <<"蛋花粉条"
@@ -428,6 +437,9 @@ void Widget::paintEvent(QPaintEvent *)
             //qDebug()<<"selectItemIndex = "<<selectItemIndex;
 
             menuList.clear();
+            Menu_Spell_List.clear();
+            Menu_Spell_Display_List.clear();
+
             totalItemNum = 0;
             selectItemIndex = 0;
 
@@ -497,15 +509,15 @@ void Widget::paintEvent(QPaintEvent *)
 
             Select_Show_Menu_Spell_Index = Menu_Spell_Display_List.indexOf(Menu_Spell_List.at(selectItemIndex));
 
-            for(int i=0; i<showItemNum; i++)
+            for(int ii=0; ii<showItemNum; ii++)
             {          //Select_Show_Menu_Spell_Index 1           //3
-                curPos = Select_Show_Menu_Spell_Index + (i-(showItemNum/2));
+                curPos = Select_Show_Menu_Spell_Index + (ii-(showItemNum/2));
 
                 if((curPos < 0)||(curPos >= (Total_Show_Menu_Spell_Num)))    //边沿检测
                 {
                     continue; //continue 语句只结束本次循环,而不是终止整个循环
                 }
-                p.drawText(755,  Address_Spell[i],  Menu_Spell_Display_List[curPos]);
+                p.drawText(755,  Address_Spell[ii],  Menu_Spell_Display_List[curPos]);
             }
         }
 
@@ -992,14 +1004,16 @@ void Widget::paintEvent(QPaintEvent *)
 
 
 
+
 //快滑松手  //快滑滑动松手根据前一刻方向 来滑最后一格
 void Widget::Scroll_Quick_TimeOut_Update_GUI()
 {
-    qDebug()<<"Scroll_Quick_TimeOut_Update_GUI >";
+    qDebug()<<"Scroll_Quick_TimeOut_Update_GUI >"<<Release_Quick_TimeOut_Flage<<" "<<Add_Step_By_Step<<"Scroll_Dir = "<<Scroll_Dir;
 
-    if(Add_Step_By_Step == FRAME)
+    if((Add_Step_By_Step == FRAME)&&(Release_Quick_TimeOut_Flage == 1))
     {
         Release_Quick_Dir_Update_Times = 0;
+        Release_Quick_TimeOut_Flage = 0;
         if(Release_Quick_Dir_Timeout->isActive() == true)
         {
              Release_Quick_Dir_Timeout->stop();
@@ -1007,7 +1021,6 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
         return;
     }
 
-    Release_Quick_Dir_Update_Times++;
 
     if(Scroll_Dir == 0x01)
     {
@@ -1019,6 +1032,8 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
             if(selectItemIndex > 0)
             {
                 selectItemIndex--;
+                Release_Quick_TimeOut_Flage = 1;
+                //audio.play(1);
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
                 //Shock_Motor.Led_On();
@@ -1030,6 +1045,7 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
         }
         if(selectItemIndex == 0)
         {
+            Release_Quick_TimeOut_Flage = 1;
             Add_Step_By_Step = FRAME;
             Last_Update_GUI = 1;
         }
@@ -1044,6 +1060,8 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
             if(selectItemIndex < (totalItemNum-1))
             {
                 selectItemIndex++;
+                Release_Quick_TimeOut_Flage = 1;
+                //audio.play(1);
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
                 //Shock_Motor.Led_On();
@@ -1056,13 +1074,14 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
 
         if(selectItemIndex == (totalItemNum-1))
         {
+            Release_Quick_TimeOut_Flage = 1;
             Add_Step_By_Step = FRAME;
             Last_Update_GUI = 1;
         }
     }
 
 
-    if(Add_Step_By_Step == FRAME)
+    if((Add_Step_By_Step == FRAME)&&(Release_Quick_TimeOut_Flage == 1))
     {
         Last_Update_GUI = 1;
         Release_Quick_Dir_Update_Times = 0;
@@ -1071,16 +1090,17 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
         {
             Release_Quick_Dir_Timeout->stop();
         }
-        repaint();
+        update();
     }
     else
     {
-        Last_Update_GUI = 0;
-        repaint();
-        if(Release_Quick_Dir_Timeout->isActive() == false)
+        //if(Release_Quick_Dir_Timeout->isActive() == true)
         {
-            Release_Quick_Dir_Timeout->start(100*Release_Quick_Dir_Update_Times); //100ms
+            qDebug()<<"Release_Quick_Dir_Update_Times = "<<Release_Quick_Dir_Update_Times;
+            Release_Quick_Dir_Update_Times++;
+            Release_Quick_Dir_Timeout->start(Release_Quick_Dir_Update_Times*20);
         }
+        update();
     }
 }
 
@@ -1145,6 +1165,7 @@ void Widget::Release_Slow_Dir_TimeOut_Update_GUI()
             if(selectItemIndex > 0)
             {
                 selectItemIndex--;
+                //audio.play(1);
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
                 //Shock_Motor.Led_On();
@@ -1172,6 +1193,7 @@ void Widget::Release_Slow_Dir_TimeOut_Update_GUI()
             if(selectItemIndex < (totalItemNum-1))
             {
                 selectItemIndex++;
+                //audio.play(1);
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
                 //Shock_Motor.Led_On();
@@ -1257,14 +1279,24 @@ void Widget::Slow_Scroll_Timer_Handle()
 
     if(Scroll_Dir == 1)
     {
-        Add_Step_By_Step--;  //   //朝下滑     6     //FRAME
+        //Add_Step_By_Step--;  //   //朝下滑     6     //FRAME
+        Add_Step_By_Step = Add_Step_By_Step - Quick_Add_Step;
         Last_Update_GUI = 0;
+
+        qDebug()<<"Add_Step_By_Step = "<<Add_Step_By_Step<< "Alarm_Flage = "<<Alarm_Flage;
+        if((Add_Step_By_Step  <=  3)&&(Alarm_Flage == 1))
+        {
+            Alarm_Flage = 0;
+            audio.play(1);
+        }
 
         if(Add_Step_By_Step <=-1)  //   6   5   4    3    2   1   0
         {
             if(selectItemIndex > 0)
             {
                 selectItemIndex--;
+                Alarm_Flage = 1;
+                //audio.play(1);
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
                 //Shock_Motor.Led_On();
@@ -1276,6 +1308,7 @@ void Widget::Slow_Scroll_Timer_Handle()
         }
         if(selectItemIndex == 0)  //最后一条不可以滑动
         {
+            audio.play(255);
             Add_Step_By_Step = FRAME;
             Last_Update_GUI = 1;
         }
@@ -1284,14 +1317,24 @@ void Widget::Slow_Scroll_Timer_Handle()
     }
     else if(Scroll_Dir == 2)
     {
-        Add_Step_By_Step++;       //上滑菜单
+        //Add_Step_By_Step++;       //上滑菜单
+        Add_Step_By_Step = Add_Step_By_Step + Quick_Add_Step;
         Last_Update_GUI = 0;
+
+        qDebug()<<"Add_Step_By_Step = "<<Add_Step_By_Step<< "Alarm_Flage = "<<Alarm_Flage;
+        if((Add_Step_By_Step >= 11) && (Alarm_Flage == 1))
+        {
+            Alarm_Flage = 0;
+            audio.play(1);
+        }
 
         if(Add_Step_By_Step >= (2*FRAME+1))  //   8    9   10     11    12  13  14
         {
             if(selectItemIndex < (totalItemNum-1))
             {
                 selectItemIndex++;
+                Alarm_Flage = 1;
+                //audio.play(1);
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
                 //Shock_Motor.Led_On();
@@ -1304,24 +1347,39 @@ void Widget::Slow_Scroll_Timer_Handle()
 
         if(selectItemIndex == (totalItemNum-1))//最后一条不可以滑动
         {
+            audio.play(255);
             Add_Step_By_Step = FRAME;
             Last_Update_GUI = 1;
         }
         //qDebug()<<"Add_Step_By_Step ++ ";
         update();
     }
+
+
     Scroll_Times--;
 
     if(Scroll_Times > 0)
     {
-        Slow_Scroll_Timer->start(1);
+        Slow_Scroll_Timer->start(Quick_Scroll_Period);
     }
-    else if(Scroll_Times <= 0)
+    if(Scroll_Times <= 0)
     {
         if(Slow_Scroll_Timer->isActive() == true)
         {
             Slow_Scroll_Timer->stop();
             Scroll_Times = 0;
+        }
+
+        if(Scroll_Quick_Flage == 1)
+        {
+            Scroll_Quick_Flage = 0;
+            Release_Quick_TimeOut_Flage = 0;
+            Release_Quick_Dir_Update_Times = 1;
+            //Release_Quick_Dir_Timeout->setSingleShot(1);
+            qDebug()<<"quick released test";
+            Last_Update_GUI = 1;
+            Release_Quick_Dir_Timeout->start(10); //50ms
+            //Scroll_Quick_TimeOut_Update_GUI();
         }
     }
 }
@@ -1337,6 +1395,7 @@ void Widget:: Quick_Scroll_Update_Timer_Slot_Handle()
             Quick_Scroll_Slot_Timer->stop();
         }
         Scroll_Times = 0;
+        //audio.play(255);
         return;
     }
     if((selectItemIndex == (totalItemNum-1))&&(Scroll_Dir == 2))//最后一条不可以滑动
@@ -1346,6 +1405,7 @@ void Widget:: Quick_Scroll_Update_Timer_Slot_Handle()
             Quick_Scroll_Slot_Timer->stop();
         }
         Scroll_Times = 0;
+        //audio.play(255);
         return;
     }
 
@@ -1356,9 +1416,11 @@ void Widget:: Quick_Scroll_Update_Timer_Slot_Handle()
     }
     else if(Scroll_Times <= 0)
     {
+        Scroll_Quick_Flage = 0;
         if(Quick_Scroll_Slot_Timer->isActive() == true)
         {
             Quick_Scroll_Slot_Timer->stop();
+            //audio.play(255);
             Scroll_Times = 0;
             Scroll_Quick_TimeOut_Update_GUI();
         }
@@ -1384,7 +1446,7 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
         if(Quick_Scroll_Slot_Timer->isActive() == true)          //快滑定时器
         {
             Scroll_Times = 0;
-            Quick_Scroll_Period = 0;
+            Quick_Scroll_Period = 20;
             qDebug()<<"Quick_Scroll_Update_Timer  stop ";
             Quick_Scroll_Slot_Timer->stop();
         }
@@ -1412,14 +1474,15 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
         }
         Release_Quick_Dir_Update_Times = 0;
 
-        //if()
+        Scroll_Quick_Flage = 0;
         Scroll_Times = 0;
-
+        //audio.play(255);
         if((Receive_Diff_Data_Total ==  0x4000)&& ((Current_Page == 0)||(Current_Page == 1)))     //确定  第0页  第1页
         {                          // 3 - 1
             if(Current_Page < (Total_Page-1))
             {
                 Current_Page++; //    1   2
+                audio.play();
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
                 //Shock_Motor.Led_On();
@@ -1442,6 +1505,7 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
             if(Current_Page > 0)
             {
                 Current_Page--; // 2   1
+                audio.play();
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
                 //Shock_Motor.Led_On();
@@ -1453,6 +1517,8 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
             }
             if(Current_Page != Previous_Page)
             {
+                Quick_Add_Step = 1;
+                Alarm_Flage = 1;
                 Widget_Page_Switch = 0;
                 update();
                 Previous_Page = Current_Page;
@@ -1508,13 +1574,56 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
                     {
                         Release_Slow_Dir_Near_Update_GUI();
                     }
+                    Quick_Add_Step = 1;
+                    Quick_Scroll_Period = 5;
+                    Alarm_Flage = 1;
                     qDebug()<<"slow 松手";
                 }
                 else if(Receive_Diff_Data < 0xFF)
                 {
                     qDebug()<<"quick 松手"<<Receive_Diff_Data;
-                    Scroll_Times = (Receive_Diff_Data*totalItemNum/10)*2;
+                    Receive_Diff_Data = Receive_Diff_Data*3;
 
+                    Scroll_Quick_Flage = 1;
+                    audio.play(10);
+                    //Scroll_Times = (Receive_Diff_Data*totalItemNum/10)*2;
+                    if(Receive_Diff_Data>=30)
+                    {
+                        Receive_Diff_Data = 30;
+                    }
+                    Quick_Scroll_Period = 30/Receive_Diff_Data;
+
+                    if(Receive_Diff_Data <= 15)
+                    {
+                        Quick_Add_Step = 1;
+                        Scroll_Times = Receive_Diff_Data%8;
+                        Scroll_Times += Receive_Diff_Data;
+                    }
+
+                    if((Receive_Diff_Data > 15)&&(Receive_Diff_Data <= 20))
+                    {
+                        Quick_Add_Step = 2;
+                        Scroll_Times = Receive_Diff_Data%4;
+                        Scroll_Times += Receive_Diff_Data;
+
+                    }
+
+                    if((Receive_Diff_Data >20)&&(Receive_Diff_Data <= 25))
+                    {
+                        Quick_Add_Step = 3;
+                        Scroll_Times = Receive_Diff_Data%3;
+                        Scroll_Times += Receive_Diff_Data;
+                    }
+
+                    if((Receive_Diff_Data >25)&&(Receive_Diff_Data <= 30))
+                    {
+                        Quick_Add_Step = 4;
+                        Scroll_Times = Receive_Diff_Data%2;
+                        Scroll_Times += Receive_Diff_Data;
+                    }
+                    Add_Step_By_Step = 7;
+                    Release_Quick_TimeOut_Flage = 0;
+/*
                     if(Scroll_Times <= 5 )
                     {
                         Quick_Scroll_Period = 25;
@@ -1535,8 +1644,9 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
                     {
                         Quick_Scroll_Period = 1;
                     }
-                    qDebug()<<"Scroll_Times = "<<Scroll_Times<<"Quick_Scroll_Period ="<<Quick_Scroll_Period;
-                    Quick_Scroll_Update_Timer_Slot_Handle();
+*/
+                    qDebug()<<"Scroll_Times = "<<Scroll_Times<<"Quick_Scroll_Period ="<<Quick_Scroll_Period<<"Quick_Add_Step = "<<Quick_Add_Step;
+                    Slow_Scroll_Timer_Handle();  //800ms 就可以执行完
                 }
             }
         }

@@ -11,6 +11,7 @@
 #include <QQueue>
 #include "led.h"
 #include "music.h"
+#include "audiothread.h"
 
 extern QMutex mutex;
 extern volatile unsigned char Current_Read_Press_Value;
@@ -65,6 +66,11 @@ private:
     volatile unsigned char Quick_Scroll_Period;
     unsigned char Quick_Scroll_Times;
 
+    unsigned char Quick_Add_Step;
+
+    unsigned char Alarm_Flage;
+
+
     unsigned int Scroll_Times;     //滑动次数
     unsigned char Scroll_Dir;                    //滑动方向 //滑动方向  1：向上滑动  2：向下滑动d
 
@@ -79,6 +85,8 @@ private:
     unsigned char Total_Page;
     volatile unsigned char Previous_Page;
     volatile unsigned char Current_Page;
+    volatile unsigned char Scroll_Quick_Flage;
+    unsigned char Release_Quick_TimeOut_Flage;
 
     QString String_Display;
     QTimer *Slow_Scroll_Timer;   //慢滑定时器
@@ -107,7 +115,7 @@ private:
 
     Led Shock_Motor;
     Music * p_Music_Alarm;
-
+    AudioThread audio;
 
 private slots:
 
