@@ -1,16 +1,24 @@
 #include "audiothread.h"
 #include <QUrl>
+#include <QDebug>
 
 AudioThread::AudioThread(QObject *parent) :
     QObject(parent)
 {
     Voice_Play_times = 0;
+    Source_Flage = 0;
     effect.moveToThread(&thread);
 
     //effect.setSource(QUrl::fromLocalFile("/home/Wolf/Alarm_Quick.wav"));
-    effect.setSource(QUrl::fromLocalFile("/home/Wolf/Alarm_Original.wav"));
+    //effect.setSource(QUrl::fromLocalFile("/home/Wolf/Alarm_Original.wav"));
+    //effect.setSource(QUrl::fromLocalFile("/home/Wolf/test.wav"));
+    //effect.setSource(QUrl::fromLocalFile("/home/Wolf/Alarm_Chage_Formt.wav"));
+    //effect.setSource(QUrl::fromLocalFile("/home/Wolf/Alarm_Chage_Formt_4.wav"));
 
-    effect.setVolume(1.0f);
+    effect.setSource(QUrl::fromLocalFile("/home/Wolf/Alarm_Chage_Formt_Double.wav"));
+
+    effect.setVolume(0.8f);
+    effect.setLoopCount(0);
 
     connect(this, SIGNAL(doPlay()), &effect, SLOT(play()));
     thread.start();
@@ -26,45 +34,40 @@ AudioThread::~AudioThread()
 
 void AudioThread::play()
 {
-    if(!effect.isPlaying())
+    emit this->doPlay();
+}
+
+
+/*
+-----------   255   ------------------
+*/
+/*
+void AudioThread::play(unsigned char type)
+{
+    unsigned char  Play_Type = type;
+
+    if(Play_Type == 0)        //while(1)
     {
-        effect.setVolume(1.0f);
+        if(Source_Flage == 1)
+        {
+            //effect.setSource(QUrl::fromLocalFile("/home/Wolf/Alarm_Chage_Formt_Double.wav"));
+            Source_Flage = 0;
+        }
         effect.setLoopCount(0);
         emit this->doPlay();
     }
-}
-/*
-255
-*/
-void AudioThread::play(int type)
-{
-    unsigned char  Play_Times = type;
-    unsigned char  Record = 0;
-    if(Play_Times >= 255)  //
+    else if(Play_Type == 1)   //while(1)
     {
-        effect.setLoopCount(0);
-        effect.setVolume(0.0f);
-        return ;
-    }
-    if(Play_Times < 255)
-    {
-        if(!effect.isPlaying()) //停止
+        if(Source_Flage == 0)
         {
-           effect.setVolume(1.0f);
-           effect.setLoopCount(0);
-           emit this->doPlay();
+            //effect.setSource(QUrl::fromLocalFile("/home/Wolf/Alarm_Chage_Formt_4.wav"));
+            Source_Flage = 1;
         }
-        else if(effect.isPlaying()) //运行
-        {
-            effect.setVolume(1.0f);
-            Record = effect.loopCount();
-            effect.setLoopCount(Record+1);
-            if(!effect.isPlaying())
-            {
-                emit this->doPlay();
-            }
 
-        }
+        //setLoopCount(QSoundEffect::Infinite);注释掉只播放一次，打开循环播放
+        effect.setLoopCount(QSoundEffect::Infinite);
+        emit this->doPlay();
     }
 }
+*/
 

@@ -62,6 +62,7 @@ int main(int argc, char *argv[])
     //qDebug()<<"Page_MyThread I am Runing";
     QObject::connect(p_iic_thread,SIGNAL(myslot(unsigned short)), &w,SLOT(Handle_Touch_Value_Event(unsigned short)));
 
+    QObject::connect(&w, SIGNAL(Touch_Allow_Send_Handler()), p_iic_thread,SLOT(Touch_Allow_Receive_Handler()));
 
     w.resize(800, 480);
     w.setWindowFlags(Qt::FramelessWindowHint);
@@ -87,7 +88,7 @@ int main(int argc, char *argv[])
     First_Page_Create = 0;
     First_Page_Update = 1;
 
-    qDebug("16619851335\n");
+    qDebug("16619851335------------------\n");
 
 
     return a.exec();

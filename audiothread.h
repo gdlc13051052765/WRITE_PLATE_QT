@@ -19,7 +19,7 @@ class AudioThread : public QObject
 {
     Q_OBJECT
 public:
-    AudioThread(QObject *parent = nullptr);
+    AudioThread(QObject *parent = 0);
     ~AudioThread();
 
 signals:
@@ -27,7 +27,7 @@ signals:
 
 public slots:
     void play();
-    void play(int type);
+    //void play(unsigned char type);
 
 private:
     int voice_type;
@@ -35,6 +35,8 @@ private:
     QSoundEffect effect;
 
     QThread thread;
+
+    unsigned char Source_Flage;
 
 };
 

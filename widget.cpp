@@ -27,6 +27,13 @@
 
 #define   FONT_STEP_VALUE     2
 
+
+
+//#define         ALARM
+//#define         RELEASED_QUICK
+
+//#define         SEND_MSG_ENABLE
+
 struct timeval tpstart,tpend;
 float timeuse;
 
@@ -80,15 +87,40 @@ static bool is_show_right_btn = false;
 static bool left_btn_dblClick = false;
 static bool right_btn_dblClick = false;
 
+
 Widget::Widget(QWidget *parent): QWidget(parent)
 {
+    key_Rcv = ftok("/tmp", 88);
+    //创建一个权限为0666（所有用户可读可写，具体查询linux权限相关内容）的消息队列，并返回一个消息队列ID，如果key值已经存在有消息队列了，则直接返回一个消息队列ID。
+    id_Rcv = msgget(key_Rcv, IPC_CREAT|0666);
+    if(id_Rcv == -1)
+    {
+        printf("create Rcv_msg error \n");
+    }
+    //Rcv_msg.mtype = 0x88;
+
+    key_Snd = ftok("/tmp", 66);
+    id_Snd = msgget(key_Snd, 0666|IPC_CREAT);
+    if(id_Snd == -1)
+    {
+        printf("create Snd_msg error \n");
+    }
+    Snd_msg.mtype = 66;
+
+    Communicate_Msg_QT_Go_Timer = new QTimer(this);          //  震动电机      OK
+    connect(Communicate_Msg_QT_Go_Timer, SIGNAL(timeout()), this, SLOT(Communicate_Msg_QT_Go_Handle()));
+
+
     Total_Page = 3;
     Current_Page = 0;
     Previous_Page = 0;
     Widget_Page_Switch = 0;
     Quick_Add_Step = 1;
     Scroll_Quick_Flage = 0;
+    Quick_Alarm_Times_Flage = 0;
 
+    Scroll_Flage = 0;
+    Scroll_Flage_Old = 0;
     Button_Determine_list.append("color:white");                         // 前景色
     Button_Determine_list.append("background-color:rgb(167,203,74)");    // 背景色
     Button_Determine_list.append("border-style:outset");                 // 边框风格
@@ -102,7 +134,6 @@ Widget::Widget(QWidget *parent): QWidget(parent)
     Button_Determine->move(718,451);
     Button_Determine->resize(75, 20);
     Button_Determine->hide();          //确定按键
-
 
     Button_Cancel_list.append("color:white");                         // 前景色
     Button_Cancel_list.append("background-color:rgb(255,255,255)");   // 背景色
@@ -158,7 +189,7 @@ Widget::Widget(QWidget *parent): QWidget(parent)
         Slider_p->setValue(totalItemNum-1-selectItemIndex);
     }
     Slider_p->hide();
-
+    Menu_ID = 0;
     baseFontSize = 70;  //中心字符大小
     //设置文字为粗体
     itemFont.setBold(true);               //封装的setWeight函数
@@ -178,6 +209,13 @@ Widget::Widget(QWidget *parent): QWidget(parent)
     //itemRealH = fm.height()*20/19 + itemIntervalH;  //计算实际间隔   //菜单实际间隔（菜单字符宽度+间隔）
     itemRealH = 0;
 
+    Update_Message_Tip = 1;
+    p_Widget_Meaasge = new Widget_Message(this);
+    p_Widget_Meaasge->resize(800, 480);
+    p_Widget_Meaasge->move(0,0);
+    p_Widget_Meaasge->hide();
+
+
     Motor_Shake_Slot_Timer = new QTimer(this);          //  震动电机      OK
     connect(Motor_Shake_Slot_Timer, SIGNAL(timeout()), this, SLOT(Motor_Shake_Slot_Timer_Handler()));
 
@@ -190,7 +228,8 @@ Widget::Widget(QWidget *parent): QWidget(parent)
     connect(Release_Quick_Dir_Timeout, SIGNAL(timeout()), this, SLOT(Scroll_Quick_TimeOut_Update_GUI()));
 
 
-
+    Test_Timer = new QTimer(this);
+    connect(Test_Timer, SIGNAL(timeout()), this, SLOT(Test_Handler()));
 
     Release_Timeout = new QTimer(this);          //  慢滑松手  靠近最近的那个    OK
     connect(Release_Timeout, SIGNAL(timeout()), this, SLOT(Release_TimeOut_Update_GUI()));
@@ -202,10 +241,19 @@ Widget::Widget(QWidget *parent): QWidget(parent)
     Slow_Scroll_Timer = new QTimer(this);        // 慢滑滑动 处理函数         OK
     connect(Slow_Scroll_Timer, SIGNAL(timeout()), this, SLOT(Slow_Scroll_Timer_Handle()));
 
+
+    Alarm_Timer = new QTimer(this);              // 闹钟 处理函数         OK
+    connect(Alarm_Timer, SIGNAL(timeout()), this, SLOT(Alarm_Timer_Handle()));
+
+
+    Update_Prompt_Message_Timer = new QTimer(this);              // 处理提示界面慢慢往下滑动    OK
+    connect(Update_Prompt_Message_Timer, SIGNAL(timeout()), this, SLOT(Update_Prompt_Message_Timer_Handle()));
+
+
     qDebug() << fm.height()<<"16619851335+";            //获取文字高度  105   327
     qDebug() << fm.maxWidth()<<"16619851335+";          //获取文字宽度
 
-
+    //Test_Timer->start(50);
     this->setObjectName("QTimer");
 
     QObject::connect(this,SIGNAL(Quick_Scroll_Slot(unsigned short)), this,SLOT(Handle_Touch_Value_Event(unsigned short)));
@@ -215,6 +263,93 @@ Widget::Widget(QWidget *parent): QWidget(parent)
 Widget::~Widget()
 {
 
+}
+
+void Widget::Update_Prompt_Message_Timer_Handle()
+{
+
+    if(Move_Prompt_Message_Times <= 4)
+    {
+        qDebug()<<"p_Widget_Meaasge->show-----------------------";
+        //Update_Message_Tip = 1;
+
+        p_Widget_Meaasge->Display_Status_Current = Rcv_Display_Status_Current;
+    /*
+        if(Move_Prompt_Message_Times < 20)
+        {
+            qDebug()<<"<20"<<Move_Prompt_Message_Times;
+            p_Widget_Meaasge->Display_Status_Current = Display_Status_Succeed;
+        }
+        else if((Move_Prompt_Message_Times >= 20)&&(Move_Prompt_Message_Times <= 40))
+        {
+            qDebug()<<"20<x<40"<<Move_Prompt_Message_Times;
+            p_Widget_Meaasge->Display_Status_Current = Display_Status_Failed;
+        }
+        else if(Move_Prompt_Message_Times > 40)
+        {
+            qDebug()<<"x>40"<<Move_Prompt_Message_Times;
+            Move_Prompt_Message_Times = 0;
+            qDebug()<<"x>40"<<Move_Prompt_Message_Times;
+            p_Widget_Meaasge->Display_Status_Current = Display_Status_Succeed;
+            p_Widget_Meaasge->Display_Status_Previous = Display_Status_Succeed;
+        }
+    */
+
+        if(p_Widget_Meaasge->Display_Status_Current != p_Widget_Meaasge->Display_Status_Previous)
+        {
+            qDebug()<<"!=";
+            Move_Prompt_Message_Times = 0;
+            //p_Widget_Meaasge->update();
+            p_Widget_Meaasge->Display_Status_Previous = p_Widget_Meaasge->Display_Status_Current;
+        }
+
+        p_Widget_Meaasge->move(0, 0 + Move_Prompt_Message_Times*Move_Prompt_Message_Times*10*2);
+    }
+    else
+    {
+        qDebug()<<">40------------------------";
+        p_Widget_Meaasge->hide();
+        //Update_Message_Tip = 0;
+        p_Widget_Meaasge->move(0, 0);
+        Move_Prompt_Message_Times = 0;
+        if(Update_Prompt_Message_Timer->isActive() == true)
+        {
+            Update_Prompt_Message_Timer->stop();
+        }
+    }
+    Move_Prompt_Message_Times++;
+}
+
+void Widget::Test_Handler()
+{
+    if((Test_Times >=0)&&(Test_Times < 1000))
+    {
+        Test_Timer->start(50);
+    }
+    if((Test_Times >=1000)&&(Test_Times < 2000))
+    {
+        Test_Timer->start(200);
+    }
+    if((Test_Times >=2000)&&(Test_Times < 3000))
+    {
+        Test_Timer->start(400);
+    }
+    if((Test_Times >=3000)&&(Test_Times < 4000))
+    {
+        Test_Timer->start(600);
+    }
+    Test_Times++;
+    if(Test_Times >=6000)
+    {
+        Test_Times = 0;
+    }
+    audio.play();
+}
+
+void Widget:: Alarm_Timer_Handle()
+{
+    //Alarm_Timer->start();
+    audio.play();
 }
 
 void Widget::Motor_Shake_Slot_Timer_Handler()
@@ -227,6 +362,214 @@ void Widget::Motor_Shake_Slot_Timer_Handler()
     Shock_Motor.Led_Off();
 }
 
+unsigned char Widget::Cal_Crc(unsigned char *Data, unsigned char Len)
+{
+    unsigned char Crc = 0, i = 0;
+
+    for(i=0; i<Len; i++)
+    {
+        Crc = Crc ^ Data[i];
+    }
+    return Crc;
+}
+
+void Widget::Communicate_Msg_QT_Go_Handle()
+{
+    qDebug()<<"Communicate_Msg_QT_Go_Handle";
+
+    if(Send_Message_Type == Send_Message_Write_Finish)
+    {
+        Send_Message_Times++;
+        if(Send_Message_Times >= 20)
+        {
+            Send_Message_Type = Send_Message_Write;
+            Send_Message_Times = 0;
+        }
+        qDebug()<<"send Write again";// add your code
+    }
+
+    if(Send_Message_Type == Send_Message_Stop_Finish)
+    {
+        Send_Message_Times++;
+        if(Send_Message_Times >= 20)
+        {
+            Send_Message_Type = Send_Message_Stop;
+            Send_Message_Times = 0;
+        }
+        qDebug()<<"send stop again";// add your code
+
+    }
+    qDebug()<<"Send_Message_Times = "<<Send_Message_Times;// add your code
+
+    if(Send_Message_Type == Send_Message_Write)
+    {
+        Snd_msg.mtext[0] = 0x06;
+        Snd_msg.mtext[1] = 0x01;
+        Snd_msg.mtext[2] = Menu_ID;
+        Snd_msg.mtext[3] = Menu_ID>>8;
+        Snd_msg.mtext[4] = Menu_ID>>16;
+        Snd_msg.mtext[5] = Menu_ID>>24;
+        Snd_msg.mtext[6] = Cal_Crc(Rcv_msg.mtext, Snd_msg.mtext[0]);
+
+        if(msgsnd(id_Snd, (void *)&Snd_msg,  10,  IPC_NOWAIT) == -1)
+        {
+            qDebug()<<"send msg error \n"; //return 0;
+        }
+        Send_Message_Type = Send_Message_Write_Finish;
+        Send_Message_Times = 0;
+        qDebug()<<"send Write";// add your code
+    }
+
+    if(Send_Message_Type == Send_Message_Stop)
+    {
+        Snd_msg.mtext[0] = 0x02;
+        Snd_msg.mtext[1] = 0x02;
+        Snd_msg.mtext[2] = Cal_Crc(Rcv_msg.mtext, Snd_msg.mtext[0]);
+
+        if(msgsnd(id_Snd, (void *)&Snd_msg,  10,  IPC_NOWAIT) == -1)
+        {
+            qDebug()<<"send msg error \n";  //return 0;
+        }
+        Send_Message_Type = Send_Message_Stop_Finish;
+        Send_Message_Times = 0;
+        qDebug()<<"send stop ";// add your code
+    }
+    if(Send_Message_Type == Send_Message_Response_Succeed)
+    {
+        Snd_msg.mtext[0] = 0x03;
+        Snd_msg.mtext[1] = 0xA1;
+        Snd_msg.mtext[2] = 0x00;
+        Snd_msg.mtext[3] = Cal_Crc(Rcv_msg.mtext, Snd_msg.mtext[0]);
+
+        if(msgsnd(id_Snd, (void *)&Snd_msg,  10,  IPC_NOWAIT) == -1)
+        {
+            qDebug()<<"send msg error \n";  //return 0;
+        }
+        Send_Message_Type = Send_Message_Response_Finish;
+        Send_Message_Times = 0;
+        qDebug()<<"send stop ";// add your code
+    }
+    if(msgrcv(id_Rcv, (void *)&Rcv_msg, 10, 88, IPC_NOWAIT) == -1)
+    {
+        qDebug()<<"receive msg error \n";
+        //return 0;
+    }
+    else
+    {
+        //Update_Message_Tip = 1;
+        if(Rcv_msg.mtext[0] > 0)
+        {
+            qDebug()<<"receive >= 0";// add your code
+            for(int i=0; i<Rcv_msg.mtext[0]; i++)
+            {
+                qDebug()<<" "<<Rcv_msg.mtext[i];
+            }
+             qDebug()<<"\r\n";
+        }
+        else
+        {
+            qDebug()<<"receive == 0";// add your code
+        }
+        Receive_Length = Rcv_msg.mtext[0];
+        if(Cal_Crc(Rcv_msg.mtext, Receive_Length) == Rcv_msg.mtext[Receive_Length])
+        {
+            if((Rcv_msg.mtext[1] == 0x01)&&(Rcv_msg.mtext[2] == 0x00))  //设置成功
+            {
+                Send_Message_Type = Recv_Message_Write_Return;
+                Send_Message_Times = 0;
+                qDebug()<<"set succeed";// add your code
+            }
+            else if((Rcv_msg.mtext[1] == 0x01)&&(Rcv_msg.mtext[2] == 0x01))  //设置失败
+            {
+                Send_Message_Type = Send_Message_Write;
+                Send_Message_Times = 0;
+                qDebug()<<"set failued";// add your code
+            }
+            if((Rcv_msg.mtext[1] == 0x02)&&(Rcv_msg.mtext[2] == 0x00))
+            {
+                Send_Message_Type = Send_Message_Stop_Finish;
+                Send_Message_Times = 0;
+                Communicate_Msg_QT_Go_Timer->stop();
+                if(Update_Prompt_Message_Timer->isActive() == true)
+                {
+                   p_Widget_Meaasge->hide();
+                   p_Widget_Meaasge->move(0, 0);
+                   Update_Prompt_Message_Timer->stop();
+                }
+                qDebug()<<"stop succeed";// add your code
+            }
+            else if((Rcv_msg.mtext[1] == 0x02)&&(Rcv_msg.mtext[2] == 0x01))
+            {
+                Send_Message_Type = Send_Message_Stop;
+                Send_Message_Times = 10;
+                qDebug()<<"stop failed";// add your code
+            }
+
+            else if((Rcv_msg.mtext[1] == 0xA1)&&(Rcv_msg.mtext[2] == 0x00))  //写盘成功
+            {
+                Rcv_Display_Status_Current = Display_Status_Succeed;
+                Update_Prompt_Message_Timer->start(500);
+                p_Widget_Meaasge->show();
+                Move_Prompt_Message_Times = 0;
+                qDebug()<<"write succeed";// add your code
+                Send_Message_Type = Send_Message_Response_Succeed;
+            }
+            else if((Rcv_msg.mtext[1] == 0xA1)&&(Rcv_msg.mtext[2] == 0x01))  //写盘失败
+            {
+                 Rcv_Display_Status_Current = Display_Status_Failed;
+                 if(Update_Prompt_Message_Timer->isActive() == false)
+                 {
+                    Update_Prompt_Message_Timer->start(500);
+                    p_Widget_Meaasge->show();
+                 }
+                 Move_Prompt_Message_Times = 0;
+                 Send_Message_Type = Send_Message_Response_Succeed;
+                 qDebug()<<"write failed";// add your code
+            }
+            else if((Rcv_msg.mtext[1] == 0xA1)&&(Rcv_msg.mtext[2] == 0x02))  //多盘存在
+            {
+                 Rcv_Display_Status_Current = Display_Status_Multi_Disk_Exist;
+                 if(Update_Prompt_Message_Timer->isActive() == false)
+                 {
+                    Update_Prompt_Message_Timer->start(500);
+                    p_Widget_Meaasge->show();
+                 }
+                 Move_Prompt_Message_Times = 0;
+                 Send_Message_Type = Send_Message_Response_Succeed;
+                 qDebug()<<"mutuile disk exist";// add your code
+            }
+            else if((Rcv_msg.mtext[1] == 0xA1)&&(Rcv_msg.mtext[2] == 0x03))  //无菜单信息
+            {
+                 Rcv_Display_Status_Current = Display_Status_No_Menu_Information;
+                 if(Update_Prompt_Message_Timer->isActive() == false)
+                 {
+                    Update_Prompt_Message_Timer->start(500);
+                    p_Widget_Meaasge->show();
+                 }
+                 Move_Prompt_Message_Times = 0;
+                 Send_Message_Type = Send_Message_Response_Succeed;
+                 qDebug()<<"no menu ";// add your code
+            }
+            else if((Rcv_msg.mtext[1] == 0xA1)&&(Rcv_msg.mtext[2] == 0x04))  //读标签失败
+            {
+                 Rcv_Display_Status_Current = Display_Status_Failed_Read_Label;
+                 if(Update_Prompt_Message_Timer->isActive() == false)
+                 {
+                    Update_Prompt_Message_Timer->start(500);
+                    p_Widget_Meaasge->show();
+                 }
+                 Move_Prompt_Message_Times = 0;
+                 Send_Message_Type = Send_Message_Response_Succeed;
+                 qDebug()<<"read remark failed";// add your code
+            }
+        }
+    }
+
+    //if(Rcv_Msg_Timer->isActive() == false)
+    {
+    //  Rcv_Msg_Timer->start(200);
+    }
+}
 
 #define MXA_FIFTER_NUM   5
 #define MAX_FIFTER_TIM   100  //MS
@@ -426,8 +769,47 @@ void Widget::paintEvent(QPaintEvent *)
         //qDebug()<<"(Current_Page == 1);";
     }
 
-    if(Current_Page == (Total_Page-1))  //   第2页
+    //if(Current_Page == (Total_Page-1))  //   第2页
+    if(Current_Page == 2)
     {
+        if(Update_Message_Tip == 1)
+        {
+            Button_Determine->hide();
+            //Button_Cancel->show();
+
+            QPainter p(this);
+            p.setRenderHints(QPainter::Antialiasing|QPainter::SmoothPixmapTransform); //抗锯齿和使用平滑转换算法
+
+            QBrush brush(QColor (57, 57 , 57, 255));
+
+            p.setBrush(brush);
+            p.drawRect(0, 0, w, h);
+
+            QRectF rectangle(8, 32, 120, 4);
+            p.drawRoundedRect(rectangle, 2, 2); //上面长条
+
+            QPen pen;
+
+            pen.setColor(QColor(255, 255, 255));
+            p.setPen(pen);
+
+            Current_FontSize = 28;
+            itemFont.setPointSize(Current_FontSize);
+            p.setFont(itemFont);
+            p.drawText(716,  68,   "返回");
+
+            Current_FontSize = 22;
+            itemFont.setPointSize(Current_FontSize);
+            p.setFont(itemFont);
+            p.drawText(10,  30,  "周二午餐");
+
+            Current_FontSize = 80;
+            itemFont.setPointSize(Current_FontSize);
+            p.setFont(itemFont);
+            p.drawText(100,  240+Current_FontSize/2,  String_Display);
+        }
+
+
         if(Widget_Page_Switch == 0)
         {
             Widget_Page_Switch = 1;
@@ -440,6 +822,10 @@ void Widget::paintEvent(QPaintEvent *)
             Menu_Spell_List.clear();
             Menu_Spell_Display_List.clear();
 
+            Slider_p->hide();
+            Button_Determine->show();
+            Button_Cancel->show();
+
             totalItemNum = 0;
             selectItemIndex = 0;
 
@@ -450,12 +836,6 @@ void Widget::paintEvent(QPaintEvent *)
 
             p.setBrush(brush);
             p.drawRect(0, 0, w, h);
-
-
-            Slider_p->hide();
-            Button_Determine->hide();
-            Button_Cancel->show();
-
 
             QRectF rectangle(8, 32, 120, 4);
             p.drawRoundedRect(rectangle, 2, 2); //上面长条
@@ -521,7 +901,8 @@ void Widget::paintEvent(QPaintEvent *)
             }
         }
 
-    if((Last_Update_GUI == 1)&&(Add_Step_By_Step==FRAME))
+    //if((Last_Update_GUI == 1)&&(Add_Step_By_Step==FRAME))
+    if((Add_Step_By_Step==FRAME))
     {
         showItemNum = 7;
         QPainter p(this);
@@ -584,7 +965,7 @@ void Widget::paintEvent(QPaintEvent *)
             //p.drawText(  10,   centerPos_y  +  (Current_FontSize/2 )+(i-(showItemNum/2))*(itemRealH) ,  menuList[curPos]);
             p.drawText(  10,  Write_Post,  menuList[curPos]);
         }
-        Last_Update_GUI = 1;
+        //Last_Update_GUI = 1;
 
         return;
     }
@@ -594,6 +975,17 @@ void Widget::paintEvent(QPaintEvent *)
         //                      7                          7 * 2
         if((Add_Step_By_Step>FRAME)&&(Add_Step_By_Step<=(FRAME*2)))  //   8   9  10   11  12  13  14
         {
+
+            if((Add_Step_By_Step >= 10) && ((Alarm_Flage == 1)||(Quick_Alarm_Times_Flage == 1)))
+            {
+                Alarm_Flage = 0;
+                Quick_Alarm_Times_Flage = 0;
+                //#ifdef ALARM
+                //qDebug()<<"Alarm>10";
+                //#endif
+                audio.play();
+            }
+
             QPainter p(this);
             QPen pen;
             int j = Add_Step_By_Step-FRAME;
@@ -621,7 +1013,6 @@ void Widget::paintEvent(QPaintEvent *)
                     {
                         p.drawText(  10,  Write_Post,  menuList[selectItemIndex + 4]);
                     }
-
                 }
             }
             {
@@ -789,11 +1180,21 @@ void Widget::paintEvent(QPaintEvent *)
                         }
                     }
                 }
-
             }
         }//                         7
         else if((Add_Step_By_Step<FRAME) && (Add_Step_By_Step>=0)) // int j = Add_Step_By_Step 6  5   4   3   2   1  0
         {
+
+            if((Add_Step_By_Step  <=  4)&&((Alarm_Flage == 1)||(Quick_Alarm_Times_Flage == 1)))
+            {
+                Alarm_Flage = 0;
+                Quick_Alarm_Times_Flage = 0;
+                //#ifdef ALARM
+                //qDebug()<<"Alarm<4";
+                //#endif
+                audio.play();
+            }
+
             QPainter p(this);
             QPen pen;
             int j = FRAME - Add_Step_By_Step;
@@ -872,7 +1273,7 @@ void Widget::paintEvent(QPaintEvent *)
                             p.drawText(  10,  Write_Post,  menuList[curPos]);
                         }
                     }
-                    else  if(i == 2)
+                    else if(i == 2)
                     {
                         //计算字体大小
                         Current_FontSize =  54 + FONT_STEP_VALUE*j ;
@@ -945,7 +1346,7 @@ void Widget::paintEvent(QPaintEvent *)
                             p.drawText(  10,  Write_Post,  menuList[curPos]);
                         }
                     }
-                    else  if(i == 6)
+                    else if(i == 6)
                     {
                         if(Add_Step_By_Step > ((FRAME-1)/2))
                         {
@@ -973,15 +1374,16 @@ void Widget::paintEvent(QPaintEvent *)
     }
 }
     //qDebug()<<"----press--is_show_left_btn:"<<is_show_left_btn<<"is_show_right_btn"<<is_show_right_btn;
+    /*
     if(is_show_left_btn)
     {
         is_show_left_btn = false;
-        /*
+
         pen.setColor(Qt::green);
         p.setPen(pen);
         p.translate(650, 240);
         p.drawText(0, 0, "左键按下");
-        */
+
     }
     else if(is_show_right_btn)
     {
@@ -998,6 +1400,7 @@ void Widget::paintEvent(QPaintEvent *)
         left_btn_dblClick = false;
 
     }
+    */
 }
 
 
@@ -1008,30 +1411,40 @@ void Widget::paintEvent(QPaintEvent *)
 //快滑松手  //快滑滑动松手根据前一刻方向 来滑最后一格
 void Widget::Scroll_Quick_TimeOut_Update_GUI()
 {
+    #ifdef RELEASED_QUICK
     qDebug()<<"Scroll_Quick_TimeOut_Update_GUI >"<<Release_Quick_TimeOut_Flage<<" "<<Add_Step_By_Step<<"Scroll_Dir = "<<Scroll_Dir;
+    #endif
 
     if((Add_Step_By_Step == FRAME)&&(Release_Quick_TimeOut_Flage == 1))
-    {
+    {   
         Release_Quick_Dir_Update_Times = 0;
         Release_Quick_TimeOut_Flage = 0;
+
         if(Release_Quick_Dir_Timeout->isActive() == true)
         {
-             Release_Quick_Dir_Timeout->stop();
+            Release_Quick_Dir_Timeout->stop();
         }
-        return;
+        emit Touch_Allow_Send_Handler();
+        update();
     }
-
 
     if(Scroll_Dir == 0x01)
     {
         Add_Step_By_Step--;  //   //下拉菜单
         Last_Update_GUI = 0;
 
+        if((Add_Step_By_Step  <=  3)&&(Alarm_Flage == 1))
+        {
+            Alarm_Flage = 0;
+            audio.play();
+        }
+
         if(Add_Step_By_Step <=-1)  //
         {
             if(selectItemIndex > 0)
             {
                 selectItemIndex--;
+                Alarm_Flage = 1;
                 Release_Quick_TimeOut_Flage = 1;
                 //audio.play(1);
                 //QSound::play("/home/Wolf/Alarm.wav");
@@ -1055,11 +1468,19 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
         Add_Step_By_Step++;       //上滑菜单
         Last_Update_GUI = 0;
 
+
+        if((Add_Step_By_Step >= 11) && (Alarm_Flage == 1))
+        {
+             Alarm_Flage = 0;
+             audio.play();
+        }
+
         if(Add_Step_By_Step >=(2*FRAME +1))  //  4   5   6
         {
             if(selectItemIndex < (totalItemNum-1))
             {
                 selectItemIndex++;
+                Alarm_Flage = 1;
                 Release_Quick_TimeOut_Flage = 1;
                 //audio.play(1);
                 //QSound::play("/home/Wolf/Alarm.wav");
@@ -1090,13 +1511,17 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
         {
             Release_Quick_Dir_Timeout->stop();
         }
+        emit Touch_Allow_Send_Handler();
+
         update();
     }
     else
     {
         //if(Release_Quick_Dir_Timeout->isActive() == true)
         {
+            #ifdef RELEASED_QUICK
             qDebug()<<"Release_Quick_Dir_Update_Times = "<<Release_Quick_Dir_Update_Times;
+            #endif
             Release_Quick_Dir_Update_Times++;
             Release_Quick_Dir_Timeout->start(Release_Quick_Dir_Update_Times*20);
         }
@@ -1160,11 +1585,19 @@ void Widget::Release_Slow_Dir_TimeOut_Update_GUI()
         Add_Step_By_Step--;  //   //朝下滑     6     //FRAME
         Last_Update_GUI = 0;
 
+        //if((Add_Step_By_Step  <=  3)&&(Alarm_Flage == 1))
+        //{
+        //    Alarm_Flage = 0;
+        //    audio.play();
+        //}
+
+
         if(Add_Step_By_Step <=-1)  //   6   5   4    3    2   1   0
         {
             if(selectItemIndex > 0)
             {
                 selectItemIndex--;
+                Alarm_Flage = 1;
                 //audio.play(1);
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
@@ -1188,11 +1621,19 @@ void Widget::Release_Slow_Dir_TimeOut_Update_GUI()
         Add_Step_By_Step++;       //上滑菜单
         Last_Update_GUI = 0;
 
+
+        //if((Add_Step_By_Step >= 11) && (Alarm_Flage == 1))
+        //{
+        //    Alarm_Flage = 0;
+        //    audio.play();
+        //}
+
         if(Add_Step_By_Step >= (2*FRAME+1))  //   8    9   10     11    12  13  14
         {
             if(selectItemIndex < (totalItemNum-1))
             {
                 selectItemIndex++;
+                Alarm_Flage = 1;
                 //audio.play(1);
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
@@ -1266,6 +1707,11 @@ void Widget::Slow_Scroll_Timer_Handle()
         {
             Slow_Scroll_Timer->stop();
         }
+        if(Alarm_Timer->isActive() == true)
+        {
+           Alarm_Timer->stop();
+        }
+
         return;
     }
     else if((selectItemIndex == (totalItemNum-1))&&(Scroll_Dir == 2))//最后一条不可以滑动
@@ -1274,6 +1720,11 @@ void Widget::Slow_Scroll_Timer_Handle()
         {
             Slow_Scroll_Timer->stop();
         }
+        if(Alarm_Timer->isActive() == true)
+        {
+           Alarm_Timer->stop();
+        }
+
         return;
     }
 
@@ -1283,11 +1734,18 @@ void Widget::Slow_Scroll_Timer_Handle()
         Add_Step_By_Step = Add_Step_By_Step - Quick_Add_Step;
         Last_Update_GUI = 0;
 
-        qDebug()<<"Add_Step_By_Step = "<<Add_Step_By_Step<< "Alarm_Flage = "<<Alarm_Flage;
-        if((Add_Step_By_Step  <=  3)&&(Alarm_Flage == 1))
+        //qDebug()<<"Add_Step_By_Step = "<<Add_Step_By_Step<< "Alarm_Flage = "<<Alarm_Flage;
+
+        //if(Scroll_Quick_Flage == 0)  // 慢滑           超过  边界开始   响动
         {
-            Alarm_Flage = 0;
-            audio.play(1);
+
+            if((Add_Step_By_Step  <=  6)&&((Alarm_Flage == 1)||(Quick_Alarm_Times_Flage == 1)))
+            {
+                Alarm_Flage = 0;
+                Quick_Alarm_Times_Flage = 0;
+                qDebug()<<"Alarm<=6";
+                audio.play();
+            }
         }
 
         if(Add_Step_By_Step <=-1)  //   6   5   4    3    2   1   0
@@ -1296,6 +1754,7 @@ void Widget::Slow_Scroll_Timer_Handle()
             {
                 selectItemIndex--;
                 Alarm_Flage = 1;
+                Quick_Alarm_Times_Flage = 1;
                 //audio.play(1);
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
@@ -1308,7 +1767,7 @@ void Widget::Slow_Scroll_Timer_Handle()
         }
         if(selectItemIndex == 0)  //最后一条不可以滑动
         {
-            audio.play(255);
+            //audio.play(255);
             Add_Step_By_Step = FRAME;
             Last_Update_GUI = 1;
         }
@@ -1321,11 +1780,18 @@ void Widget::Slow_Scroll_Timer_Handle()
         Add_Step_By_Step = Add_Step_By_Step + Quick_Add_Step;
         Last_Update_GUI = 0;
 
-        qDebug()<<"Add_Step_By_Step = "<<Add_Step_By_Step<< "Alarm_Flage = "<<Alarm_Flage;
-        if((Add_Step_By_Step >= 11) && (Alarm_Flage == 1))
+        //qDebug()<<"Add_Step_By_Step = "<<Add_Step_By_Step<< "Alarm_Flage = "<<Alarm_Flage;
+        //if(Scroll_Quick_Flage == 0) //慢滑           超过  边界开始   响动
         {
-            Alarm_Flage = 0;
-            audio.play(1);
+
+            if((Add_Step_By_Step >= 8) && ((Alarm_Flage == 1)||(Quick_Alarm_Times_Flage == 1)))
+            {
+                Alarm_Flage = 0;
+                Quick_Alarm_Times_Flage = 0;
+                qDebug()<<"Alarm>=8";
+                audio.play();
+                //p_Music_Alarm->Play_Alarm_Music();
+            }
         }
 
         if(Add_Step_By_Step >= (2*FRAME+1))  //   8    9   10     11    12  13  14
@@ -1334,6 +1800,7 @@ void Widget::Slow_Scroll_Timer_Handle()
             {
                 selectItemIndex++;
                 Alarm_Flage = 1;
+                Quick_Alarm_Times_Flage = 1;
                 //audio.play(1);
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
@@ -1347,7 +1814,7 @@ void Widget::Slow_Scroll_Timer_Handle()
 
         if(selectItemIndex == (totalItemNum-1))//最后一条不可以滑动
         {
-            audio.play(255);
+            //audio.play(255);
             Add_Step_By_Step = FRAME;
             Last_Update_GUI = 1;
         }
@@ -1359,7 +1826,7 @@ void Widget::Slow_Scroll_Timer_Handle()
     Scroll_Times--;
 
     if(Scroll_Times > 0)
-    {
+    {      
         Slow_Scroll_Timer->start(Quick_Scroll_Period);
     }
     if(Scroll_Times <= 0)
@@ -1370,14 +1837,21 @@ void Widget::Slow_Scroll_Timer_Handle()
             Scroll_Times = 0;
         }
 
-        if(Scroll_Quick_Flage == 1)
+        if(Scroll_Quick_Flage == 1)  //
         {
+            if(Alarm_Timer->isActive() == true)
+            {
+               Alarm_Timer->stop();
+               audio.play();     //  1  次
+            }
+
             Scroll_Quick_Flage = 0;
             Release_Quick_TimeOut_Flage = 0;
             Release_Quick_Dir_Update_Times = 1;
             //Release_Quick_Dir_Timeout->setSingleShot(1);
-            qDebug()<<"quick released test";
+            //qDebug()<<"quick released test";
             Last_Update_GUI = 1;
+            //Alarm_Flage = 1;
             Release_Quick_Dir_Timeout->start(10); //50ms
             //Scroll_Quick_TimeOut_Update_GUI();
         }
@@ -1440,20 +1914,25 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
     }
     else if(sender()->objectName() == "IIC_MyThread")
     {
-        qDebug()<<"objectName() = IIC_MyThread";
-        printf("Receive_Diff_Data_Total = %x\r\n", Receive_Diff_Data_Total);
-
+        //qDebug()<<"objectName() = IIC_MyThread";
+        //qDebug()<<"Receive_Diff_Data_Total = "<<Receive_Diff_Data_Total;
         if(Quick_Scroll_Slot_Timer->isActive() == true)          //快滑定时器
         {
             Scroll_Times = 0;
             Quick_Scroll_Period = 20;
-            qDebug()<<"Quick_Scroll_Update_Timer  stop ";
+            //qDebug()<<"Quick_Scroll_Update_Timer  stop ";
             Quick_Scroll_Slot_Timer->stop();
         }
 
         if(Slow_Scroll_Timer->isActive() == true)    //  关掉所有 刷新  定时器   慢滑定时器
         {
             Slow_Scroll_Timer->stop();
+
+            if(Alarm_Timer->isActive() == true)    // 闹钟
+            {
+               Alarm_Timer->stop();
+            }
+            Scroll_Times = 0;
         }
 
         if(Release_Timeout->isActive() == true)            //  慢滑   松手 定时器
@@ -1471,18 +1950,21 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
         if(Release_Quick_Dir_Timeout->isActive() == true)   //  快滑  松手 定时器
         {
             Release_Quick_Dir_Timeout->stop();
+            if(Alarm_Timer->isActive() == true)    // 闹钟
+            {
+               Alarm_Timer->stop();
+            }
+            Release_Quick_Dir_Update_Times = 1;
         }
-        Release_Quick_Dir_Update_Times = 0;
+
 
         Scroll_Quick_Flage = 0;
-        Scroll_Times = 0;
-        //audio.play(255);
+
         if((Receive_Diff_Data_Total ==  0x4000)&& ((Current_Page == 0)||(Current_Page == 1)))     //确定  第0页  第1页
         {                          // 3 - 1
             if(Current_Page < (Total_Page-1))
             {
                 Current_Page++; //    1   2
-                audio.play();
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
                 //Shock_Motor.Led_On();
@@ -1495,7 +1977,31 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
             }
             if(Current_Page != Previous_Page)
             {
+                audio.play();
+                Quick_Add_Step = 1;
                 Widget_Page_Switch = 0;
+
+                if((Current_Page == 2)&&(Previous_Page == 1)) //从第二页到第三页
+                {
+                    Send_Message_Type = Send_Message_Write;
+                    Communicate_Msg_QT_Go_Timer->start(200);
+                    //Communicate_Msg_QT_Go_Handle();
+/*
+                    Snd_msg.mtext[0] = 0x06;
+                    Snd_msg.mtext[1] = 0x01;
+                    Snd_msg.mtext[2] = Menu_ID;
+                    Snd_msg.mtext[3] = Menu_ID>>8;
+                    Snd_msg.mtext[4] = Menu_ID>>16;
+                    Snd_msg.mtext[5] = Menu_ID>>24;
+                    Snd_msg.mtext[6] = Cal_Crc(Rcv_msg.mtext, Snd_msg.mtext[0]);
+
+                    if(msgsnd(id_Snd, (void *)&Snd_msg,  7,  IPC_NOWAIT) == -1)
+                    {
+                        printf("send msg error \n");
+                        //return 0;
+                    }
+*/
+                }
                 update();
                 Previous_Page = Current_Page;
             }
@@ -1505,7 +2011,6 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
             if(Current_Page > 0)
             {
                 Current_Page--; // 2   1
-                audio.play();
                 //QSound::play("/home/Wolf/Alarm.wav");
                 //p_Music_Alarm->Play_Alarm_Music();
                 //Shock_Motor.Led_On();
@@ -1517,9 +2022,28 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
             }
             if(Current_Page != Previous_Page)
             {
+                audio.play();
                 Quick_Add_Step = 1;
-                Alarm_Flage = 1;
                 Widget_Page_Switch = 0;
+                if((Current_Page == 1)&&(Previous_Page == 2)) //从第二页到第一页
+                {
+                    Send_Message_Type = Send_Message_Stop;
+                    Communicate_Msg_QT_Go_Timer->start(1000);
+
+/*
+                    //Snd_msg.mtext[0] = 0x04;
+                    //Snd_msg.mtext[1] = 0x03;
+                    //Snd_msg.mtext[2] = 00;
+                    //Snd_msg.mtext[3] = 00;
+                    //Snd_msg.mtext[4] = Cal_Crc(Rcv_msg.mtext, Snd_msg.mtext[0]);
+
+                    if(msgsnd(id_Snd, (void *)&Snd_msg,  10,  IPC_NOWAIT) == -1)
+                    {
+                        //printf("send msg error \n");
+                        //return 0;
+                    }
+*/
+                }
                 update();
                 Previous_Page = Current_Page;
             }
@@ -1536,7 +2060,6 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
                 // 滑动值越来越大
                 Receive_Diff_Data = Receive_Diff_Data_Total - 0x100;
                 //printf("Receive_Diff_Data = %x\r\n", Receive_Diff_Data);
-
                 if(Data_Flage == 0)   //  方向确定
                 {
                     Scroll_Dir = 1;
@@ -1548,10 +2071,11 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
                     Data_Flage = 0;
                 }
 
-                if(Receive_Diff_Data >= 4) // 4S  内执行完
+                if(Receive_Diff_Data >= 1) // 4S  内执行完
                 {
-                    Receive_Diff_Data = 4;
+                    Receive_Diff_Data = 1;
                 }
+                //Receive_Diff_Data = Receive_Diff_Data>>1;
 
                 if(Dir_Old ==  Scroll_Dir)
                 {
@@ -1560,6 +2084,12 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
                 else if(Dir_Old != Scroll_Dir)
                 {
                     Scroll_Times = Receive_Diff_Data;
+                }
+                Scroll_Flage = 1;
+                Quick_Alarm_Times_Flage = 0;
+                if(Scroll_Flage != Scroll_Flage_Old)
+                {
+                    Alarm_Flage = 1;
                 }
                 Slow_Scroll_Timer_Handle();  //800ms 就可以执行完
             }
@@ -1576,50 +2106,71 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
                     }
                     Quick_Add_Step = 1;
                     Quick_Scroll_Period = 5;
-                    Alarm_Flage = 1;
-                    qDebug()<<"slow 松手";
+                    Last_Update_GUI = 1;
+                    //qDebug()<<"slow 松手";
                 }
                 else if(Receive_Diff_Data < 0xFF)
                 {
-                    qDebug()<<"quick 松手"<<Receive_Diff_Data;
-                    Receive_Diff_Data = Receive_Diff_Data*3;
-
-                    Scroll_Quick_Flage = 1;
-                    audio.play(10);
+                    //qDebug()<<"quick released"<<Receive_Diff_Data;
+                    //Receive_Diff_Data = Receive_Diff_Data*4;
+                    Receive_Diff_Data = Receive_Diff_Data*6;
                     //Scroll_Times = (Receive_Diff_Data*totalItemNum/10)*2;
-                    if(Receive_Diff_Data>=30)
+                    if(Receive_Diff_Data >= 60)
                     {
-                        Receive_Diff_Data = 30;
+                        Receive_Diff_Data = 60;
                     }
-                    Quick_Scroll_Period = 30/Receive_Diff_Data;
+                    Quick_Scroll_Period = 60/Receive_Diff_Data;
 
-                    if(Receive_Diff_Data <= 15)
+
+                    if(Receive_Diff_Data <= 30)
                     {
                         Quick_Add_Step = 1;
-                        Scroll_Times = Receive_Diff_Data%8;
-                        Scroll_Times += Receive_Diff_Data;
+                        if(Receive_Diff_Data < 8)
+                        {
+                            Scroll_Times = 8;
+                        }
+                        else
+                        {
+                            Scroll_Times = 8 - (Receive_Diff_Data%8);
+                            Scroll_Times += Receive_Diff_Data;
+                        }
                     }
 
-                    if((Receive_Diff_Data > 15)&&(Receive_Diff_Data <= 20))
+                    if((Receive_Diff_Data > 30)&&(Receive_Diff_Data <= 40))
                     {
                         Quick_Add_Step = 2;
-                        Scroll_Times = Receive_Diff_Data%4;
+                        Scroll_Times =  4 -(Receive_Diff_Data%4);
                         Scroll_Times += Receive_Diff_Data;
-
                     }
 
-                    if((Receive_Diff_Data >20)&&(Receive_Diff_Data <= 25))
+                    if((Receive_Diff_Data >40)&&(Receive_Diff_Data <= 50))
                     {
                         Quick_Add_Step = 3;
-                        Scroll_Times = Receive_Diff_Data%3;
+                        Scroll_Times = 3 - (Receive_Diff_Data%3);
                         Scroll_Times += Receive_Diff_Data;
                     }
 
-                    if((Receive_Diff_Data >25)&&(Receive_Diff_Data <= 30))
+                    if((Receive_Diff_Data >50)&&(Receive_Diff_Data <= 60))
                     {
                         Quick_Add_Step = 4;
-                        Scroll_Times = Receive_Diff_Data%2;
+                        Scroll_Times = 2 - (Receive_Diff_Data%2);
                         Scroll_Times += Receive_Diff_Data;
+                    }
+                    if((Quick_Add_Step == 1)&&(Scroll_Times <= 48))  //让喇叭单次响动
+                    {
+                        Scroll_Flage = 2;
+                        Alarm_Flage = 0;
+                        if(Scroll_Flage != Scroll_Flage_Old)
+                        {
+                            Quick_Alarm_Times_Flage = 1;
+                        }
+                    }
+                    else                                            //让喇叭一直响动
+                    {
+                        Scroll_Quick_Flage = 1;
+                        Quick_Alarm_Times_Flage = 0;
+                        Alarm_Flage = 0;
+                        Alarm_Timer->start(Quick_Scroll_Period*10);
                     }
                     Add_Step_By_Step = 7;
                     Release_Quick_TimeOut_Flage = 0;
@@ -1645,10 +2196,80 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
                         Quick_Scroll_Period = 1;
                     }
 */
-                    qDebug()<<"Scroll_Times = "<<Scroll_Times<<"Quick_Scroll_Period ="<<Quick_Scroll_Period<<"Quick_Add_Step = "<<Quick_Add_Step;
+                    //qDebug()<<"Scroll_Times = "<<Scroll_Times<<"Quick_Scroll_Period ="<<Quick_Scroll_Period<<"让喇叭单次响动 = "<<Quick_Add_Step;
                     Slow_Scroll_Timer_Handle();  //800ms 就可以执行完
                 }
             }
         }
+        Scroll_Flage_Old = Scroll_Flage;
     }
 }
+
+
+
+Widget_Message::Widget_Message(QWidget *parent)
+    : QWidget(parent)
+{
+    //this->setWindowFlags(this->windowFlags() | Qt::WindowStaysOnTopHint);
+    Display_Status_Current = Display_Status_Succeed;
+    Display_Status_Previous = Display_Status_Succeed;
+}
+
+Widget_Message::~Widget_Message()
+{
+
+}
+
+
+void Widget_Message::paintEvent(QPaintEvent *)
+{
+    int w = this->width();      //宽
+    int h = this->height();     //高
+    QPainter p(this);
+    QPen pen;
+
+    pen.setColor(QColor(255, 255, 255));
+    p.setPen(pen);
+
+    itemFont.setPointSize(80);
+    p.setFont(itemFont);
+
+    if(Display_Status_Current == Display_Status_Succeed)
+    {
+        QBrush brush1(QColor (167,203,74, 255));
+
+        p.setBrush(brush1);
+        p.drawRect(0, 0, w, h);
+        p.drawText(150,  280,  "写卡成功");
+    }
+    else if(Display_Status_Current == Display_Status_Failed)
+    {
+        QBrush brush1(QColor (250, 06 , 30, 255));
+        p.setBrush(brush1);
+        p.drawRect(0, 0, w, h);
+        p.drawText(150,  280,  "写卡失败");
+    }
+    else if(Display_Status_Current == Display_Status_Multi_Disk_Exist)
+    {
+        QBrush brush1(QColor (250, 06 , 30, 255));
+        p.setBrush(brush1);
+        p.drawRect(0, 0, w, h);
+        p.drawText(150,  280,  "多盘存在");
+    }
+    else if(Display_Status_Current == Display_Status_No_Menu_Information)
+    {
+        QBrush brush1(QColor (250, 06 , 30, 255));
+        p.setBrush(brush1);
+        p.drawRect(0, 0, w, h);
+        p.drawText(150,  280,  "无菜单信息");
+    }
+    else if(Display_Status_Current == Display_Status_Failed_Read_Label)
+    {
+        QBrush brush1(QColor (250, 06 , 30, 255));
+        p.setBrush(brush1);
+        p.drawRect(0, 0, w, h);
+        p.drawText(150,  280,  "读标签失败");
+    }
+}
+
+
