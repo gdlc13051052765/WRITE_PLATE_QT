@@ -9,16 +9,12 @@ AudioThread::AudioThread(QObject *parent) :
     Source_Flage = 0;
     effect.moveToThread(&thread);
 
-    //effect.setSource(QUrl::fromLocalFile("/home/Wolf/Alarm_Quick.wav"));
-    //effect.setSource(QUrl::fromLocalFile("/home/Wolf/Alarm_Original.wav"));
-    //effect.setSource(QUrl::fromLocalFile("/home/Wolf/test.wav"));
-    //effect.setSource(QUrl::fromLocalFile("/home/Wolf/Alarm_Chage_Formt.wav"));
-    //effect.setSource(QUrl::fromLocalFile("/home/Wolf/Alarm_Chage_Formt_4.wav"));
-
-    effect.setSource(QUrl::fromLocalFile("/home/Wolf/Alarm_Chage_Formt_Double.wav"));
+    effect.setSource(QUrl::fromLocalFile("/home/meican/Alarm.wav"));
+    //MyTest160.wav
+    //effect.setSource(QUrl::fromLocalFile("/home/Wolf/MyTest78.wav"));
 
     effect.setVolume(0.8f);
-    effect.setLoopCount(0);
+    //effect.setLoopCount(0);
 
     connect(this, SIGNAL(doPlay()), &effect, SLOT(play()));
     thread.start();
@@ -34,8 +30,10 @@ AudioThread::~AudioThread()
 
 void AudioThread::play()
 {
+    QThread::msleep(5);
     emit this->doPlay();
 }
+
 
 
 /*

@@ -83,6 +83,8 @@ class IIC_MyThread: public QThread
 public:
     explicit IIC_MyThread(QObject *parent = 0);
     ~IIC_MyThread();
+    int get_touch_value();//获取当前按键值
+    void aplay_touch_voice();
 
 protected:
     //QThread的虚函数
@@ -134,7 +136,7 @@ private slots:
 //    void Pressd_Timer_Handle();
 };
 
-
+uint8_t set_touch_config_param(void);
 uint8_t Set_Sys_Param(int fd);
 
 uint8_t Get_Sys_Param(int fd);
