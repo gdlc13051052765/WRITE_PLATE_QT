@@ -142,12 +142,17 @@ int selectItemIndexBak = 0;//菜品标号备份
 bool quickSlowMoveFlag = false;//快慢滑动标记
 
 
-/* 实现按钮点击槽函数 */
-void Widget::playPushButtonClicked()
+void Widget:: play_wav()
 {
-    /* 异步的方式播放 */
-   // QSound::play("/home/meican/Touch_Music74.wav");
+    //while(1)
+    {
+        if(!play->isRunning())
+        {   
+            play->start();
+        }  
+    }
 }
+
 
 Widget::Widget(QWidget *parent): QWidget(parent)
 {
@@ -189,10 +194,6 @@ Widget::Widget(QWidget *parent): QWidget(parent)
     Slow_Scroll_Music_Times_Start_Flage = 1;
     Slow_Scroll_Music_Send_Timer = new QTimer(this);          // 慢滑喇叭定时器      
     connect(Slow_Scroll_Music_Send_Timer, SIGNAL(timeout()), this, SLOT(Slow_Scroll_Music_Send_Timer_Handle()));
-
-    // 实例化 语音播放按键
-    Button_Play_Alarm = new QPushButton(this);
-    connect(Button_Play_Alarm, SIGNAL(clicked()), this, SLOT(playPushButtonClicked()));
 
     Scroll_Times_Quick_Last = 0;   // 快滑 减速处理
     Scroll_Times_Quick_Last_Period = 0;
@@ -354,7 +355,7 @@ Widget::Widget(QWidget *parent): QWidget(parent)
     qDebug()<<"软件版本 ="<<mDevMsg.soft_ver;
     qDebug()<<"固件更新 ="<<mDevMsg.otaResult ;
     if(mDevMsg.otaResult == "ok") {
-        qDebug()<<"固件更新成功3";
+        qDebug()<<"固件更新成功";
         devStatusBak = mDevMsg.devStatus;
         mDevMsg.devStatus = UPDATE_OTA_STATUS;//设备状态进入固件更新状态
         updateProcess = 100;//进度条进度
@@ -381,9 +382,11 @@ Widget::Widget(QWidget *parent): QWidget(parent)
     }
     p_menu_ver = mDevMsg.menu_ver;
 
-   // sound=new  QSound("/home/meican/Alarm.wav");
-    Button_Play_Alarm->clicked();
-    Button_Play_Alarm->hide();
+    qDebug()<<"语音播放。。。。";
+    play = new Play(settings);
+    play->open_and_print_file_params("/home/meican/test.wav");
+    play->SetWavFileName("/home/meican/Alarm.wav");
+    play_wav();
 }
 
 Widget::~Widget()
@@ -1430,10 +1433,51 @@ void Widget::dev_work_status_task()
         //进入正常选菜单工作状态
         //从菜单数据库读取菜单等级
         mMenu.grade = mSqliteClass.Sqlite_read_grade_from_menudb(pMenudbName);
+        if(mMenu.grade<=0)
+        {
+            QPainter p(this);
+            QPen pen;
+            p.setRenderHints(QPainter::Antialiasing|QPainter::SmoothPixmapTransform); //抗锯齿和使用平滑转换算法
+            pen.setWidth(1);
+            pen.setColor(QColor (57, 57, 57, 255));
+            p.setPen(pen);
+
+            QBrush brush(QColor (57, 57, 57, 255));
+            p.setBrush(brush);
+            p.drawRect(0, 0, w-90-1, h);
+
+            pen.setWidth(1);
+            pen.setColor(QColor (0, 0, 0, 255));
+            p.setPen(pen);
+            QBrush brush1(QColor (0, 0, 0, 255));
+            p.setBrush(brush1);
+            p.drawRect(w-90, 0, 90-1, h);    //右半边矩形
+            
+            p.setBrush(brush);               //假滑条的棍
+            QRectF rectangle1(750, 20, 8, 440);
+            p.drawRoundedRect(rectangle1, 8, 8);
+            p.setRenderHints(QPainter::Antialiasing|QPainter::SmoothPixmapTransform); //抗锯齿和使用平滑转换算法
+            QBrush brush3(QColor (167, 203, 74, 255));
+            p.setBrush(brush3);
+            QRectF rectangle2(746, 100, 16, 80);
+            p.drawRoundedRect(rectangle2, 8, 8);
+
+            pen.setColor(QColor(255, 255, 255));
+            p.setPen(pen);
+            Current_FontSize = 50;
+            itemFont.setPointSize(Current_FontSize);
+            p.setFont(itemFont);
+            p.drawText(250, 250, "空菜单");
+            Button_Determine->hide();
+            Button_Cancel->hide();
+            return;
+        }
+            
     }
     if(aplaySelectItemIndex != selectItemIndex) {
         aplaySelectItemIndex = selectItemIndex;
-        audio.play();
+        
+        play_wav();
     }
         
     qDebug()<<"确定selectItemIndex = "<<selectItemIndex;
@@ -3458,13 +3502,14 @@ void Widget::dev_work_status_touch_handele(int Receive_Diff_Data_Total)
     unsigned char  Dir_Old = 0;
     int postionStart, postionEnd;
 
-   if(Receive_Diff_Data_Total == 0x4000 ||Receive_Diff_Data_Total == 0x8000)
-       audio.play();
-
+    if(Receive_Diff_Data_Total == 0x4000 ||Receive_Diff_Data_Total == 0x8000)
+    {
+        play_wav();
+    }
     //写盘状态
     if(updateMenuStatus == Update_Menu_Ok)//菜单更新成功
     {
-       if(Receive_Diff_Data_Total == 0x4000) {//确定按键
+        if(Receive_Diff_Data_Total == 0x4000) {//确定按键
            Receive_Diff_Data_Total = 0;
            updateMenuStatus = Update_Menu_Work_Status;//进入工作状态
            Current_Page = 0;
@@ -3476,7 +3521,7 @@ void Widget::dev_work_status_touch_handele(int Receive_Diff_Data_Total)
            update();
            Previous_Page = Current_Page;
            return;
-       }
+        }
     }
     if(mDevMsg.devStatus != SETUP_STATUS) 
     {
@@ -3957,6 +4002,7 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
     int value = 0;
 
    //audio.play();
+    
     //获取touch值判断是否触发设置按键
     if(mDevMsg.devStatus != SETUP_STATUS & mDevMsg.devStatus != FACTORY_CHECK_STATUS & Current_Page == 0 ) 
     {
@@ -4425,145 +4471,4 @@ void Widget_Message::paintEvent(QPaintEvent *)
         p.drawText(716, 68, "返回");
         p.drawText(716, 440, "确定");
     }
-}
-
-int alsa_play(char *wav_name, unsigned int val, char chs)
-{
-//	int i;
-//    int ret;
-//    int buf[128];
-//    int dir=0;
-//    char *buffer;
-//    int size;
-//    snd_pcm_uframes_t frames;
-//    snd_pcm_uframes_t periodsize;
-//    snd_pcm_t *playback_handle;//PCM设备句柄pcm.h
-//    snd_pcm_hw_params_t *hw_params;//硬件信息和PCM流配置
-    
- 
-//    FILE *fp = fopen(wav_name, "rb");
-//    if(fp == NULL)
-//    	return -1;
-//    fseek(fp, 100, SEEK_SET);
-
-//    //1. 打开PCM，最后一个参数为0意味着标准配置
-//    ret = snd_pcm_open(&playback_handle, "default", SND_PCM_STREAM_PLAYBACK, 0);
-//    if (ret < 0) {
-//        perror("snd_pcm_open");
-//        exit(1);
-//    }
-
-//    //2. 分配snd_pcm_hw_params_t结构体
-//    ret = snd_pcm_hw_params_malloc(&hw_params);
-//    if (ret < 0) {
-//        perror("snd_pcm_hw_params_malloc");
-//        exit(1);
-//    }
-//    //3. 初始化hw_params
-//    ret = snd_pcm_hw_params_any(playback_handle, hw_params);
-//    if (ret < 0) {
-//        perror("snd_pcm_hw_params_any");
-//        exit(1);
-//    }
-//    //4. 初始化访问权限
-//    ret = snd_pcm_hw_params_set_access(playback_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
-//    if (ret < 0) {
-//        perror("snd_pcm_hw_params_set_access");
-//        exit(1);
-//    }
-//    //5. 初始化采样格式SND_PCM_FORMAT_U8,8位
-//    ret = snd_pcm_hw_params_set_format(playback_handle, hw_params, SND_PCM_FORMAT_S16_LE);
-//    if (ret < 0)
-//    {
-//        perror("snd_pcm_hw_params_set_format");
-//        exit(1);
-//    }
-//    //6. 设置采样率，如果硬件不支持我们设置的采样率，将使用最接近的
-//    //val =  441000;//,有些录音采样频率固定为8KHz
-//   //val = 128000;
-//    ret = snd_pcm_hw_params_set_rate_near(playback_handle, hw_params, &val, &dir);
-//    if (ret < 0)
-//    {
-//        perror("snd_pcm_hw_params_set_rate_near");
-//        exit(1);
-//    }
-//    //7. 设置通道数量
-//    ret = snd_pcm_hw_params_set_channels(playback_handle, hw_params, chs);
-//    if (ret < 0)
-//    {
-//        perror("snd_pcm_hw_params_set_channels");
-//        exit(1);
-//    }
-
-//    /* Set period size to 32 frames. */
-//    frames = 32;
-//    periodsize = frames ;
-//    ret = snd_pcm_hw_params_set_buffer_size_near(playback_handle, hw_params, &periodsize);
-//    if (ret < 0)
-//    {
-//        printf("Unable to set buffer size %li : %s\n", frames * 2, snd_strerror(ret));
-//    }
-//    periodsize /= 2;
-
-//    ret = snd_pcm_hw_params_set_period_size_near(playback_handle, hw_params, &periodsize, 0);
-//    if (ret < 0)
-//    {
-//        printf("Unable to set period size %li : %s\n", periodsize, snd_strerror(ret));
-//    }
-
-//    //8. 设置hw_params
-//    ret = snd_pcm_hw_params(playback_handle, hw_params);
-//    if (ret < 0) {
-//        perror("snd_pcm_hw_params");
-//        exit(1);
-//    }
-
-//     /* Use a buffer large enough to hold one period */
-//    snd_pcm_hw_params_get_period_size(hw_params, &frames, &dir);
-
-//    size = frames * 2; /* 2 bytes/sample, 2 channels */
-//    buffer = (char *) malloc(size);
-//    //size = 2048;
-//    fprintf(stderr, "size = %d\n", size);
-
-//    while (1)
-//    {
-//        ret = fread(buffer, 1, size, fp);
-//        if(ret == 0)
-//        {
-//            fprintf(stderr, "end of file on input\n");
-//            break;
-//        }
-//        else if (ret != size)
-//        {
-//            fprintf(stderr, "size error\n");
-//        }
-//        else
-//        {
-//            fprintf(stderr, "size ok\n");
-//        }
-//        //9. 写音频数据到PCM设备
-//        while(ret = snd_pcm_writei(playback_handle, buffer, frames) < 0)
-//        {
-//           // usleep(2000);
-//            if (ret == -EPIPE)
-//            {
-//                /* EPIPE means underrun */
-//                fprintf(stderr, "underrun occurred\n");
-//                //完成硬件参数设置，使设备准备好
-//                snd_pcm_prepare(playback_handle);
-//            }
-//            else if (ret < 0)
-//            {
-//                fprintf(stderr, "error from writei: %s\n", snd_strerror(ret));
-//            }
-//            else
-//            {
-//                fprintf(stderr, "write ok\n");
-//            }
-//        }
-//    }
-//    //10. 关闭PCM设备句柄
-//    snd_pcm_close(playback_handle);
-//	return 0;
 }

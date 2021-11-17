@@ -2,7 +2,8 @@
 #include <getopt.h>
 
 #include "settings.h"
-#include "mainwindow.h"
+//#include "mainwindow.h"
+
 
 static struct option options[] =
         {{"help", 0, 0, 'h'},
@@ -127,11 +128,11 @@ int SettingsData::parseCmdLine(int argc, char *argv[])
                 midiNote = atoi(optarg);
                 break;
             case 'v':
-                printf(ABOUTMSG);
+               
                 return 0;
             case 'h':
                 SettingsData def;
-                printf("%s\n", ABOUTMSG);
+               
                 printf("General options:\n");
                 printf("--32bit                     Use 32 Bit format\n");
                 printf("--buffersize <bytes>        Size of ringbuffer [%ld]\n",

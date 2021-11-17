@@ -14,11 +14,11 @@
 class Play : public QThread
 {
 private:
-	snd_pcm_t *play_handle;
+	snd_pcm_t *play_handle = NULL;
 	bool doPlay;
 	QString pcmName;
-        QString wavFileName;
-        FILE* pWavFile;
+    QString wavFileName;
+    FILE* pWavFile;
 
 	int samplesize;
 	int framesize;
@@ -32,13 +32,13 @@ private:
 	
 public:
 	Play(SettingsData * settings);
+	int open_and_print_file_params(char *file_name);
 	~Play();
-        virtual void run();
+    virtual void run();
         //void Start();
 	void Stop();
 	void Playback(unsigned char* buffer, int size);
-        void SetWavFileName(QString strWavFileName);
+    void SetWavFileName(QString strWavFileName);
 };
-
 
 #endif

@@ -25,7 +25,10 @@ SOURCES += main.cpp\
     aplay_pthread.cpp \
     sqlite3.cpp \
     dispNetStatus.cpp \
-    page_pthread.cpp
+    page_pthread.cpp \
+    play.cpp \
+    settings.cpp \
+    ringbuffer.cpp
 
 HEADERS  += widget.h \
     i2c-dev.h \
@@ -36,4 +39,6 @@ HEADERS  += widget.h \
     aplay_pthread.h \
     sqlite3.h \
     dispNetStatus.h \
-    page_pthread.h
+    page_pthread.h \
+    play.h \
+    settings.h

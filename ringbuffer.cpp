@@ -8,7 +8,7 @@ RingBuffer::RingBuffer(long size, int channelCount, bool enable32bit)
 
     if (ringBufSize % (sampleSize * channels) != 0) {
         qCritical("Ringbuf size must be multiple of frame size (%d)\n", 
-          sampleSize * channels);
+        sampleSize * channels);
         exit(1);
     }
     ringBuf = (unsigned char *)malloc(ringBufSize);
@@ -206,4 +206,3 @@ void RingBuffer::discardBuffer()
     readOfs += q_atomic_set_int(&fillRate, 0);
 #endif
 }
-

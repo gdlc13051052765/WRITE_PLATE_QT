@@ -22,6 +22,10 @@
 #include <sys/ipc.h>
 #include "dispNetStatus.h"
 
+#include "settings.h"
+
+#include "play.h"
+
 //菜单更新状态
 enum  Update_Menu_Status
 {
@@ -317,6 +321,9 @@ private:
 
     QSound *sound;
 
+    Play* play;
+    SettingsData *settings;
+
 private slots:
 
     void Update_Prompt_Message_Timer_Handle();
@@ -361,8 +368,7 @@ private slots:
     void dev_site_config_net_touch_handle(int Receive_Diff_Data_Total);
     void factory_hardware_check_touch_handle(int Receive_Diff_Data_Total);
     void qtReboot();
-
-    void playPushButtonClicked();
+    void play_wav();
     
 signals:
 
