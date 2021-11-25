@@ -18,6 +18,7 @@ struct configMsgSt
     QString har_ver;//硬件版本
     QString soft_ver;//软件版本
     QString otaResult;//固件更新结果
+    int toalMenuGrade;//总的菜单等级
 };
 //菜单信息结构体
 struct menuSt

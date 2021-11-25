@@ -33,6 +33,8 @@
 #include <math.h>
 #include <inttypes.h>
 #include <QImage>
+#include <qfontdatabase.h>
+
 
 #define   ALARM_SLOW_ENABLE
 #define   MOTOR_SHAKE_MS                    100
@@ -40,6 +42,14 @@
 #define   SPEED_SORT          1     //高速低速分界线
 #define   FRAME               7     //FRAME
 #define   FONT_STEP_VALUE     2
+
+//确定返回键的位移坐标
+#define  returnButtonX  716
+#define  returnButtonY 38
+#define  determineButtonX  716
+#define  determineButtonY 475
+#define  spellDispNumber   5//字母显示个数
+//#define   DEBUG_ENABLED  //debug使能接口
 
 //#define DRAW_DEBUG //调试是否画框
 
@@ -91,7 +101,8 @@ static int  Address_Font[15][7] = {
 0,    20,   78,    152,   238,   309,   372,      //        14
 };
 
-static int  Address_Spell[7] = {130, 170, 210, 250, 290, 330, 370};
+//static int  Address_Spell[7] = {130, 170, 210, 250, 290, 330, 370};
+static int  Address_Spell[5] = {130, 200, 260, 325, 390};
 //static int  Virtual_Font[7] = {22, 38, 54, 70, 54, 38, 22};
 static int  Virtual_Font[7] = {25, 40, 55, 70, 55, 40, 25};
 //static int  Virtual_Font[7] = {20, 28, 32, 54, 32, 28, 20};
@@ -127,6 +138,8 @@ static bool touch_check_start = false;//touch检测
 static int rgbTest = 0;
 long long int p_menu_ver = 0;//菜单版本
 
+static bool unbindFlag = false;//没有解绑
+
 QString dishName = "";//选中的菜品名称
 QString dispProcess = "";//显示搜索进度
 
@@ -140,6 +153,8 @@ bool touchLock = false;//按键锁
 
 int selectItemIndexBak = 0;//菜品标号备份
 bool quickSlowMoveFlag = false;//快慢滑动标记
+
+int toalMenuGrade = 0;//总的菜单等级
 
 
 void Widget:: play_wav()
@@ -156,7 +171,10 @@ void Widget:: play_wav()
 
 Widget::Widget(QWidget *parent): QWidget(parent)
 {
-    qDebug() <<"QT version 0.0.1";
+    #ifdef DEBUG_ENABLED
+        qDebug() <<"QT version 0.0.1";
+    #endif
+    
     if(backUpFlag == false)
      mSqliteClass.Sqlite_update_process_db_run();//进程数据库写入运行成功标记位
 
@@ -217,7 +235,8 @@ Widget::Widget(QWidget *parent): QWidget(parent)
 
     Button_Determine = new QPushButton(this);
     Button_Determine->setStyleSheet((Button_Determine_list.join(';')));
-    Button_Determine->move(718,451);
+    //Button_Determine->move(718,451);
+    Button_Determine->move(718,420);
     Button_Determine->resize(75, 20);
     Button_Determine->hide();//确定按键
 
@@ -230,7 +249,8 @@ Widget::Widget(QWidget *parent): QWidget(parent)
 
     Button_Cancel = new QPushButton(this);
     Button_Cancel->setStyleSheet(Button_Cancel_list.join(';'));
-    Button_Cancel->move(718,9);
+   // Button_Cancel->move(718,9);
+   Button_Cancel->move(718,50);
     Button_Cancel->resize(75, 20);
     Button_Cancel->hide(); //取消按键
 
@@ -262,10 +282,20 @@ Widget::Widget(QWidget *parent): QWidget(parent)
 
     if( ((totalItemNum-1-selectItemIndex) >=0) && ((totalItemNum-1-selectItemIndex)<= totalItemNum-1))
     {
-      Slider_p->setValue(totalItemNum-1-selectItemIndex);
+      //Slider_p->setValue(totalItemNum-1-selectItemIndex);
+        Slider_p->setMinimum(0);               // 最小值
+        Slider_p->setMaximum(373);  // 最大值
+        Slider_p->setSingleStep(373/(totalItemNum));  // 最大值
+        QString str = "QSlider::groove:vertical{height: 373px; width: 4px; border-radius:2px; left: 20px; right: 20px; background: #707070;}\\QSlider::handle:vertical{height: ";
+        str.append(QString::number(373/(totalItemNum)));
+        str.append("px; width: 6px; border-radius:3px; margin-left:-1px; margin-right:-1px; background: #A7CB4A;}");
+        //qDebug() << "setStyleSheet == ...." <<str;
+        Slider_p->setStyleSheet(str);
+        Slider_p->setValue((totalItemNum-selectItemIndex-1)*(373/(totalItemNum-1)));
     }
     Slider_p->hide();
 
+    Mid_Slider_p =new QSlider(this);
     Setup_Slider_p =new QSlider(this);
     Setup_Slider_p->setOrientation(Qt::Vertical);
     Setup_Slider_p->setGeometry (752, 90, 6, 300);
@@ -293,9 +323,11 @@ Widget::Widget(QWidget *parent): QWidget(parent)
     itemFont.setWeight(QFont::Light);
 
     QFontMetrics fm(itemFont);
-    qDebug() << fm.height()<<"16619851335";           //获取文字高度  105  327
-    qDebug() << fm.maxWidth()<<"16619851335";         //获取文字宽度
-
+    #ifdef DEBUG_ENABLED
+        qDebug() << fm.height()<<"16619851335";           //获取文字高度  105  327
+        qDebug() << fm.maxWidth()<<"16619851335";         //获取文字宽度
+    #endif
+   
     //itemRealH = fm.height()*20/19 + itemIntervalH;  //计算实际间隔 //菜单实际间隔（菜单字符宽度+间隔）
     itemRealH = 0;
 
@@ -343,17 +375,25 @@ Widget::Widget(QWidget *parent): QWidget(parent)
     Update_Prompt_Message_Timer = new QTimer(this); //处理提示界面慢慢往下滑动  OK
     connect(Update_Prompt_Message_Timer, SIGNAL(timeout()), this, SLOT(Update_Prompt_Message_Timer_Handle()));
 
-    qDebug() << fm.height()<<"16619851335+";  //获取文字高度  105   327
-    qDebug() << fm.maxWidth()<<"16619851335+";//获取文字宽度
-
+    #ifdef DEBUG_ENABLED
+        qDebug() << fm.height()<<"16619851335+";  //获取文字高度  105   327
+        qDebug() << fm.maxWidth()<<"16619851335+";//获取文字宽度
+    #endif
+   
     mDevMsg = mSqliteClass.Sqlite_read_msg_from_configdb();//配置数据库读取设备信息
-    printf("设备状态 = %d\n",mDevMsg.devStatus );
-    printf("设备ID = %d\n", mDevMsg.devId );
-    qDebug()<<"设备sn ="<<mDevMsg.sn ;
-    qDebug()<<"菜单版本 ="<<mDevMsg.menu_ver;
-    qDebug()<<"硬件版本 ="<<mDevMsg.har_ver;
-    qDebug()<<"软件版本 ="<<mDevMsg.soft_ver;
-    qDebug()<<"固件更新 ="<<mDevMsg.otaResult ;
+    printf("设备状态 = %d\n",mDevMsg.devStatus);
+    printf("设备ID = %d\n", mDevMsg.devId);
+    toalMenuGrade = mDevMsg.toalMenuGrade;
+    printf("总的菜单等级 = %d\n", toalMenuGrade);
+    
+    #ifdef DEBUG_ENABLED
+        qDebug()<<"设备sn ="<<mDevMsg.sn ;
+        qDebug()<<"菜单版本 ="<<mDevMsg.menu_ver;
+        qDebug()<<"硬件版本 ="<<mDevMsg.har_ver;
+        qDebug()<<"软件版本 ="<<mDevMsg.soft_ver;
+        qDebug()<<"固件更新 ="<<mDevMsg.otaResult ;
+    #endif
+
     if(mDevMsg.otaResult == "ok") {
         qDebug()<<"固件更新成功";
         devStatusBak = mDevMsg.devStatus;
@@ -382,11 +422,23 @@ Widget::Widget(QWidget *parent): QWidget(parent)
     }
     p_menu_ver = mDevMsg.menu_ver;
 
-    qDebug()<<"语音播放。。。。";
+    qDebug()<<"开机语音播放。。。。";
     play = new Play(settings);
-    play->open_and_print_file_params("/home/meican/test.wav");
+    play->open_and_print_file_params("/home/meican/Alarm.wav");
     play->SetWavFileName("/home/meican/Alarm.wav");
     play_wav();
+    //查找支持的字库文件
+    QFontDatabase database;
+    foreach (const QString &family, database.families())
+    {
+        qDebug()<<family;
+    }
+    qDebug()<<"\r\n now is chinese font. \r\n";
+    //下面为支持简体中文字体库
+    foreach (const QString &family, database.families(QFontDatabase::SimplifiedChinese))
+    {
+        qDebug()<<"支持的字库文件="<<family;
+    }
 }
 
 Widget::~Widget()
@@ -397,12 +449,21 @@ Widget::~Widget()
 void Widget::Update_Prompt_Message_Timer_Handle()
 {
     Move_Prompt_Message_Times++;
-    qDebug()<<"Update_Prompt_Message_Timer_Handle";
+    #ifdef DEBUG_ENABLED
+        qDebug()<<"Update_Prompt_Message_Timer_Handle";
+    #endif
+    
     if(Move_Prompt_Message_Times <= 4)
     {
-        qDebug()<<"p_Widget_Meaasge->show-----------------------";
+        #ifdef DEBUG_ENABLED
+            qDebug()<<"p_Widget_Meaasge->show-----------------------";
+        #endif
+        
         if(p_Widget_Meaasge->Display_Status_Current != p_Widget_Meaasge->Display_Status_Previous) {
+            #ifdef DEBUG_ENABLED
             qDebug()<<"!=";
+            #endif
+            
             Move_Prompt_Message_Times = 0;
             //p_Widget_Meaasge->update();
             p_Widget_Meaasge->Display_Status_Previous = p_Widget_Meaasge->Display_Status_Current;
@@ -425,8 +486,9 @@ void Widget::Slow_Scroll_Music_Send_Timer_Handle()
 {
     if(Slow_Scroll_Music_Times_Stored > 0) {
         Slow_Scroll_Music_Times_Stored--;
-        qDebug()<<"Send audio.play()";
-       // audio.play();
+        #ifdef DEBUG_ENABLED
+            qDebug()<<"Send audio.play()";
+        #endif
     }
 }
 
@@ -541,18 +603,26 @@ void Widget::Setup_Touch_Check_Handle()
             (Setup_Touch_Time_list.at(Setup_Touch_Value_list.count()-1) - Setup_Touch_Time_list.at(0) < 100 ) &
             otherList.at(0) <30) //滑动时间
         {
-            qDebug() << "设置按键触发";
-            devStatusBak = mDevMsg.devStatus;//备份当前设备状态，设置界面退出后返回当前设备状态
-            mDevMsg.devStatus = SETUP_STATUS;//设备状态
-            Widget_Page_Switch = 0;
-            Current_Page = 1;
-            selectItemIndex = 2;
-            //Setup_Touch_Check_Timer.stop();
-            update();
+            if (NetConfigStatus != Config_Net_Status_Process) {
+                qDebug() << "设置按键触发";
+                devStatusBak = mDevMsg.devStatus;//备份当前设备状态，设置界面退出后返回当前设备状态
+                mDevMsg.devStatus = SETUP_STATUS;//设备状态
+                Widget_Page_Switch = 0;
+                Current_Page = 1;
+                selectItemIndex = 2;
+                //Setup_Touch_Check_Timer.stop();
+                update();
+            } else {
+
+            }
+            
         }
-        qDebug() << "Setup_Touch_Time_list  = " << Setup_Touch_Time_list;
-        qDebug() << "Setup_Touch_Value_list = " << Setup_Touch_Value_list;
-        qDebug() << "otherList = " << otherList;
+        #ifdef DEBUG_ENABLED
+            qDebug() << "Setup_Touch_Time_list  = " << Setup_Touch_Time_list;
+            qDebug() << "Setup_Touch_Value_list = " << Setup_Touch_Value_list;
+            qDebug() << "otherList = " << otherList;
+        #endif
+        
         Setup_Touch_Value_list.clear();
         Setup_Touch_Time_list.clear();
     }
@@ -592,7 +662,9 @@ void Widget::Communicate_Msg_QT_Go_Handle()
         if(Send_Message_Times >= 20) {
             Send_Message_Type = Send_Message_Write;
             Send_Message_Times = 0;
+            #ifdef DEBUG_ENABLED
             qDebug()<<"send Write again";// add your code
+            #endif  
         }  
     }
     if(Send_Message_Type == Send_Message_Stop_Finish) {
@@ -654,6 +726,7 @@ void Widget::Communicate_Msg_QT_Go_Handle()
         Send_Message_Type  = Send_Config_Net_Finsh;
         Send_Message_Times = 0;
         qDebug()<<"Send_Config_Net send stop ";
+
     }
     if(Send_Message_Type == Send_Reboot_Ota_golang_App) { //发送ota重启指令到golang后台
         Snd_msg.mtext[0] = 0x02;
@@ -776,7 +849,6 @@ void Widget::Communicate_Msg_QT_Go_Handle()
                 qDebug()<<"write succeed---------------------";// 
                // Send_Message_Type = Send_Status_Message_Response;
                 Send_Message_Type = Send_Response_Finish;
-
                 touchLock = true;//按键加锁
             }
             else if((Rcv_msg.mtext[1] == 0xA1)&&(Rcv_msg.mtext[2] == 0x01))//写盘失败
@@ -863,8 +935,8 @@ void Widget::Communicate_Msg_QT_Go_Handle()
                 //         mDevMsg.devStatus = devStatusBak;  
                 //     }          
                 // }
-                mDevMsg = mSqliteClass.Sqlite_read_msg_from_configdb();//配置数据库读取设备信息
-                if(mDevMsg.devStatus == SITE_BIND_OK_STATUS)
+                configMsgSt pDevMsg = mSqliteClass.Sqlite_read_msg_from_configdb();//配置数据库读取设备信息
+                if(pDevMsg.devStatus == SITE_BIND_OK_STATUS & mDevMsg.devStatus <=LOCAL_UNBIND_STATUS)
                 {
                     Current_Page = 0;
                     selectItemIndex = 0;
@@ -872,9 +944,10 @@ void Widget::Communicate_Msg_QT_Go_Handle()
                     p_Widget_Meaasge->hide();
                     p_Widget_Meaasge->Son_Button_Cancel->hide();
                     p_Widget_Meaasge->Son_Button_Determine->hide(); //确认按键
+                    update();
                 }
                 qDebug() << "devStatusBak = " << devStatusBak << mDevMsg.devStatus;
-                update();
+               // update();
                 return;
             }
             else if((Rcv_msg.mtext[1] == 0xA3)&&(Rcv_msg.mtext[2] == 0x02))  //配网失败
@@ -893,17 +966,20 @@ void Widget::Communicate_Msg_QT_Go_Handle()
 
             if(Rcv_msg.mtext[1] == 0xA5)//更改设备状态
             {
-                mDevMsg.devStatus = Rcv_msg.mtext[2];
-                //devStatusBak = mDevMsg.devStatus;
-                Send_Message_Type = Send_Change_Dev_Status_Response;
-                mDevMsg = mSqliteClass.Sqlite_read_msg_from_configdb();//配置数据库读取设备信息
-                printf("更改后设备状态 = %d\n", mDevMsg.devStatus);
-                printf("更改后设备ID   = %d\n", mDevMsg.devId);
-                qDebug()<<"更改后设备SN ="<<mDevMsg.sn;
-                p_Widget_Meaasge->hide();
-                Setup_Touch_Value_list.clear();
-                Setup_Touch_Time_list.clear();
-                update();
+                if(mDevMsg.devStatus != Rcv_msg.mtext[2] & mDevMsg.devStatus <= LOCAL_UNBIND_STATUS)
+                {
+                    mDevMsg.devStatus = Rcv_msg.mtext[2];
+                    //devStatusBak = mDevMsg.devStatus;
+                    Send_Message_Type = Send_Change_Dev_Status_Response;
+                    mDevMsg = mSqliteClass.Sqlite_read_msg_from_configdb();//配置数据库读取设备信息
+                    printf("更改后设备状态 = %d\n", mDevMsg.devStatus);
+                    printf("更改后设备ID   = %d\n", mDevMsg.devId);
+                    qDebug()<<"更改后设备SN ="<<mDevMsg.sn;
+                    p_Widget_Meaasge->hide();
+                    Setup_Touch_Value_list.clear();
+                    Setup_Touch_Time_list.clear();
+                    update();
+                } 
             }
 
             //菜单更新命令
@@ -963,7 +1039,6 @@ void Widget::Communicate_Msg_QT_Go_Handle()
             {
                 updateOtaStatus = Update_Ota_Ok;
                 qDebug() <<"qt 固件更新成功";
-               // qtReboot();
                 update();
             }
             else if((Rcv_msg.mtext[1] == 0xA7)&&(Rcv_msg.mtext[2] == 0x02))//固件更新失败
@@ -1037,7 +1112,10 @@ static int fifter_count = 0;
 void Widget::dev_factory_init_status_task(int status)
 {
     int Current_FontSize = 28;
-    qDebug()<<"设备状态 =" << mDevMsg.devStatus ;
+    #ifdef DEBUG_ENABLED
+        qDebug()<<"设备状态 =" << mDevMsg.devStatus ;
+    #endif  
+    
     int w = this->width();      //宽
     int h = this->height();     //高
     QPainter p(this);
@@ -1068,8 +1146,8 @@ void Widget::dev_factory_init_status_task(int status)
             Current_FontSize = 28;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
-            p.drawText(716, 440, "确定");
-            p.drawText(716, 68,  "返回");
+            p.drawText(determineButtonX, determineButtonY, "确定");
+            p.drawText(returnButtonX, returnButtonY,  "返回");
 
             Current_FontSize = 40;
             itemFont.setPointSize(Current_FontSize);
@@ -1085,7 +1163,7 @@ void Widget::dev_factory_init_status_task(int status)
             Current_FontSize = 28;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
-            p.drawText(716, 68, "返回");
+            p.drawText(returnButtonX, returnButtonY, "返回");
 
             Current_FontSize = 45;
             itemFont.setPointSize(Current_FontSize);
@@ -1118,7 +1196,7 @@ void Widget::dev_factory_init_status_task(int status)
             Current_FontSize = 28;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
-            p.drawText(716, 68,  "返回");
+            p.drawText(returnButtonX, returnButtonY,  "返回");
             qDebug()<< "联网成功";
             Button_Cancel->show();    
         break;
@@ -1141,7 +1219,7 @@ void Widget::dev_factory_init_status_task(int status)
             Current_FontSize = 28;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
-            p.drawText(716, 68,  "返回");
+            p.drawText(returnButtonX, returnButtonY,  "返回");
             qDebug()<< "联网失败";
             Button_Cancel->show();  
         break;
@@ -1185,7 +1263,7 @@ void Widget::dev_configh_net_task()
     int Current_FontSize = 28;
     itemFont.setPointSize(Current_FontSize);
     p.setFont(itemFont);
-    p.drawText(716, 68,  "返回");
+    p.drawText(returnButtonX, returnButtonY,  "返回");
     Button_Determine->hide();
     Button_Cancel->show(); 
 }
@@ -1293,7 +1371,10 @@ void Widget::dev_work_status_task()
     int curPos = 0;
     volatile int Write_Post = 0;
 
-    qDebug() << "设备状态 = " << mDevMsg.devStatus;
+    #ifdef DEBUG_ENABLED
+        qDebug()<<"设备状态 =" << mDevMsg.devStatus ;
+    #endif  
+  
     Setup_Slider_p->hide();
     p_Widget_Meaasge->Son_Button_Cancel->hide();
     p_Widget_Meaasge->Son_Button_Determine->hide(); //确认按键
@@ -1338,6 +1419,8 @@ void Widget::dev_work_status_task()
                 itemFont.setPointSize(Current_FontSize);
                 p.setFont(itemFont);
                 p.drawText(250, 250, "无菜单");
+                Button_Determine->hide();
+                Button_Cancel->hide(); 
                 
                 pMenudbName = "menu_lev1";
                 Widget_Page_Switch = 0;
@@ -1401,7 +1484,7 @@ void Widget::dev_work_status_task()
             Current_FontSize = 28;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
-            p.drawText(716, 440, "确定");
+            p.drawText(determineButtonX, determineButtonY, "确定");
             Button_Determine->show();//确定按键显示
         }
         else if (updateMenuStatus == Update_Menu_Fail)
@@ -1425,7 +1508,7 @@ void Widget::dev_work_status_task()
             Current_FontSize = 28;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
-            p.drawText(716, 440, "确定");
+            p.drawText(determineButtonX, determineButtonY, "确定");
             Button_Determine->show();//确定按键显示
         }   
         if(updateMenuStatus !=Update_Menu_Work_Status )
@@ -1433,6 +1516,7 @@ void Widget::dev_work_status_task()
         //进入正常选菜单工作状态
         //从菜单数据库读取菜单等级
         mMenu.grade = mSqliteClass.Sqlite_read_grade_from_menudb(pMenudbName);
+      
         if(mMenu.grade<=0)
         {
             QPainter p(this);
@@ -1471,20 +1555,22 @@ void Widget::dev_work_status_task()
             Button_Determine->hide();
             Button_Cancel->hide();
             return;
-        }
-            
+        }      
     }
-    if(aplaySelectItemIndex != selectItemIndex) {
-        aplaySelectItemIndex = selectItemIndex;
+    // if(aplaySelectItemIndex != selectItemIndex) {
+    //     aplaySelectItemIndex = selectItemIndex;
         
-        play_wav();
-    }
-        
-    qDebug()<<"确定selectItemIndex = "<<selectItemIndex;
-    qDebug()<<"Current_Page = "<<Current_Page;
+    //     //play_wav();
+    // }
+    #ifdef DEBUG_ENABLED
+        qDebug()<<"确定selectItemIndex = "<<selectItemIndex;
+        qDebug()<<"Current_Page = "<<Current_Page;
+    #endif 
+    
     if(updateMenuStatus == Update_Menu_Start) return;
     if(Current_Page == 0)
     {
+        Mid_Slider_p->hide();
         QPainter p(this);
         if(Widget_Page_Switch == 0)
         {
@@ -1528,39 +1614,56 @@ void Widget::dev_work_status_task()
             Button_Determine->show();//确定按键显示
 
             Slider_p->setMinimum(0);               // 最小值
-            Slider_p->setMaximum(totalItemNum-1);  // 最大值
+            Slider_p->setMaximum(373);  // 最大值
+            Slider_p->setSingleStep(373/(totalItemNum));  // 最大值
+            QString str = "QSlider::groove:vertical{height: 373px; width: 4px; border-radius:2px; left: 20px; right: 20px; background: #707070;}\\QSlider::handle:vertical{height: ";
+            str.append(QString::number(373/(totalItemNum)));
+            str.append("px; width: 6px; border-radius:3px; margin-left:-1px; margin-right:-1px; background: #A7CB4A;}");
+            //qDebug() << "setStyleSheet == ...." <<str;
+            Slider_p->setStyleSheet(str);
+            Slider_p->setValue((totalItemNum-selectItemIndex-1)*(373/(totalItemNum-1)));
             Slider_p->show();          //滑条
         }
         p.setRenderHints(QPainter::Antialiasing|QPainter::SmoothPixmapTransform); //抗锯齿和使用平滑转换算法
 
         QPen pen;
         pen.setWidth(1);
-        pen.setColor(QColor (57, 57, 57, 255));
+        pen.setColor(QColor(57, 57, 57, 255));
         p.setPen(pen);
 
-        QBrush brush(QColor (57, 57, 57, 255));
+        QBrush brush(QColor(57, 57, 57, 255));
         p.setBrush(brush);
         p.drawRect(0, 0, w-90-1, h);
 
         pen.setWidth(1);
-        pen.setColor(QColor (0, 0, 0, 255));
+        pen.setColor(QColor(0, 0, 0, 255));
         p.setPen(pen);
-        QBrush brush1(QColor (0, 0, 0, 255));
+        QBrush brush1(QColor(0, 0, 0, 255));
         p.setBrush(brush1);
         p.drawRect(w-90, 0, 90-1, h);              //右半边矩形
 
         if(((totalItemNum-1-selectItemIndex) >=0) && ((totalItemNum-1-selectItemIndex)<= totalItemNum-1)) {
-            Slider_p->setValue(totalItemNum-1-selectItemIndex);
+            //Slider_p->setValue(totalItemNum-1-selectItemIndex);
+            Slider_p->setMinimum(0);               // 最小值
+            Slider_p->setMaximum(373);  // 最大值
+            Slider_p->setSingleStep(373/(totalItemNum));  // 最大值
+            QString str = "QSlider::groove:vertical{height: 373px; width: 4px; border-radius:2px; left: 20px; right: 20px; background: #707070;}\\QSlider::handle:vertical{height: ";
+            str.append(QString::number(373/(totalItemNum)));
+            str.append("px; width: 6px; border-radius:3px; margin-left:-1px; margin-right:-1px; background: #A7CB4A;}");
+            //qDebug() << "setStyleSheet == ...." <<str;
+            Slider_p->setStyleSheet(str);
+            Slider_p->setValue((totalItemNum-selectItemIndex-1)*(373/(totalItemNum-1)));
         }
         pen.setColor(QColor(255, 255, 255));
         p.setPen(pen);
         Current_FontSize = 28;
         itemFont.setPointSize(Current_FontSize);
         p.setFont(itemFont);
-        p.drawText(716, 440, "确定");
+        p.drawText(determineButtonX, determineButtonY, "确定");
         pselectMenuName = menuList.at(selectItemIndex);//选中的菜单名字
     }
     else if(Current_Page == 1) {
+        Mid_Slider_p->hide();
         if(Widget_Page_Switch == 0) {
             Widget_Page_Switch = 1;
             menuList.clear();
@@ -1569,10 +1672,16 @@ void Widget::dev_work_status_task()
 
             if(mDevMsg.devStatus != SETUP_STATUS) {
                 menuList = mSqliteClass.Sqlite_read_context_from_menudb(pMenudbName);
-                qDebug()<<"选中菜单名字 = "<<pMenudbName;
+                #ifdef DEBUG_ENABLED
+                    qDebug()<<"选中菜单名字 = "<<pMenudbName;
+                #endif 
+                
                 //从数据库选取上级菜单的名字显示在上面
                 pPreSelectMenuName = mSqliteClass.Sqlite_read_nextmenu_context_from_menudb(pMenudbName.left(pMenudbName.length() -2 ) ,pMenudbName);
-                qDebug()<<"顶上菜单名字 = "<<pPreSelectMenuName;
+                #ifdef DEBUG_ENABLED
+                    qDebug()<<"顶上菜单名字 = "<<pPreSelectMenuName;
+                #endif 
+                
                 Menu_Spell_List = mSqliteClass.Sqlite_read_spell_from_menudb(pMenudbName);
                 Menu_Spell_Display_List = Menu_Spell_List;
                 removeListSame(&Menu_Spell_Display_List);
@@ -1581,7 +1690,10 @@ void Widget::dev_work_status_task()
                 pPreSelectMenuName = "系统界面";
                 totalItemNum = menuList.length();
             }
-            qDebug()<< "menuList = "<<menuList;
+            #ifdef DEBUG_ENABLED
+                qDebug()<< "menuList = "<<menuList;
+            #endif 
+            
             // menuList<<"白菜花"<<"白菜粉条"<<"白菜蛋花"<<"白菜肉片"<<"白菜黄瓜"<<"白菜萝卜"<<"菜花粉条"<<"菜花黄瓜"<<"菜花肉片"
             //         <<"菜花"
             //         <<"蛋花粉条"
@@ -1640,17 +1752,17 @@ void Widget::dev_work_status_task()
 
         QBrush brush2(QColor(167, 203, 74));
         p.setBrush(brush2);
-        QRectF rectangle(5, 32, 690, 4);
+        QRectF rectangle(5, 55, 690, 6);
         p.drawRoundedRect(rectangle, 2, 2);        //上面长条
   
         if(mDevMsg.devStatus != SETUP_STATUS) {//
-            p.setBrush(brush);                         //假滑条的棍
-            QRectF rectangle1(750, 100, 16, 280);
-            p.drawRoundedRect(rectangle1, 8, 8);
-            p.setRenderHints(QPainter::Antialiasing|QPainter::SmoothPixmapTransform); //抗锯齿和使用平滑转换算法
-            QBrush brush3(QColor (167, 203, 74, 255));
-            p.setBrush(brush3);
-            p.drawEllipse(742, 225, 30, 30);           //假滑条的圆
+            // p.setBrush(brush);                         //假滑条的棍
+            // QRectF rectangle1(750, 100, 16, 280);
+            // p.drawRoundedRect(rectangle1, 8, 8);
+            // p.setRenderHints(QPainter::Antialiasing|QPainter::SmoothPixmapTransform); //抗锯齿和使用平滑转换算法
+            // QBrush brush3(QColor (167, 203, 74, 255));
+            // p.setBrush(brush3);
+            // p.drawEllipse(742, 225, 30, 30);           //假滑条的圆
         } else { //设置界面处理滑条进度条   
             if((selectItemIndex+1) == totalItemNum) Setup_Slider_p->setValue((totalItemNum-selectItemIndex)*3.5);
             else Setup_Slider_p->setValue((totalItemNum-selectItemIndex)*4.9);
@@ -1662,14 +1774,15 @@ void Widget::dev_work_status_task()
         Current_FontSize = 28;
         itemFont.setPointSize(Current_FontSize);
         p.setFont(itemFont);
-        p.drawText(716, 440, "确定");
-        p.drawText(716, 68,  "返回");
+        p.drawText(determineButtonX, determineButtonY, "确定");
+        p.drawText(returnButtonX, returnButtonY,  "返回");
         // p.drawText(320, 30, "周二午餐");//mMenu
         //上面显示上级菜单名字
-        //p.drawText(320-pPreSelectMenuName.length()*10, 30, pPreSelectMenuName);
-        p.drawText(0,0,this->width()-60,30,Qt::AlignCenter,pPreSelectMenuName);
+        p.drawText(0,10,this->width()-60,30,Qt::AlignCenter,pPreSelectMenuName);
         pselectMenuName = menuList.at(selectItemIndex);//选中的菜单名字
-        qDebug()<<"pselectMenuName line 1361 = "<<pselectMenuName;
+        #ifdef DEBUG_ENABLED
+            qDebug()<<"pselectMenuName line 1670 = "<<pselectMenuName;
+        #endif    
     }
     if(Current_Page == 2 && mDevMsg.devStatus != SETUP_STATUS)
     {   
@@ -1697,19 +1810,16 @@ void Widget::dev_work_status_task()
             Current_FontSize = 28;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
-            p.drawText(716, 68, "返回");
+            p.drawText(returnButtonX, returnButtonY, "返回");
 
             Current_FontSize = 22;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
             //p.drawText(10,  30,  "周二午餐");
-            p.drawText(10, 30, pPreSelectMenuName);//上面框显示上级菜单名字
+            p.drawText(10, 35, pPreSelectMenuName);//上面框显示上级菜单名字
 
             //显示选中的要写的菜品的名字
             dishName = String_Display;
-            qDebug()<<"选中的字符串长度 = " << String_Display.length()/8;
-            qDebug()<<"屏幕宽度 = " << this->width()<< this->height();
-            //String_Display = "中华人民共和国北京市朝阳区将台路中华人民共和国北京市朝阳区将台路";
             switch(String_Display.length()/9)
             {
                 case 0:
@@ -1784,15 +1894,14 @@ void Widget::dev_work_status_task()
             Current_FontSize = 28;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
-            p.drawText(716, 68, "返回");
+            p.drawText(returnButtonX, returnButtonY, "返回");
 
             Current_FontSize = 22;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
             //p.drawText(10,  30,  "周二午餐");
-            p.drawText(10, 30, pPreSelectMenuName);//上面框显示上级菜单名字
+            p.drawText(10, 35, pPreSelectMenuName);//上面框显示上级菜单名字
 
-            //String_Display = "中华人民共和国北京市朝阳区将台路中华人民共和国北京市朝阳区将台路";
             //显示选中的要写的菜品的名字 
             switch(String_Display.length()/9)
             {
@@ -1835,10 +1944,22 @@ void Widget::dev_work_status_task()
     //0  1 界面刷新
     if((Current_Page == 0)||(Current_Page == 1))
     {
+        Mid_Slider_p->hide();
         if(Current_Page == 0)
         {
             if(((totalItemNum-1-selectItemIndex) >=0) && ((totalItemNum-1-selectItemIndex)<= totalItemNum-1))
-                Slider_p->setValue(totalItemNum-1-selectItemIndex);
+            {
+                // Slider_p->setValue(totalItemNum-1-selectItemIndex);
+                Slider_p->setMinimum(0);               // 最小值
+                Slider_p->setMaximum(373);  // 最大值
+                Slider_p->setSingleStep(373/(totalItemNum));  // 最大值
+                QString str = "QSlider::groove:vertical{height: 373px; width: 4px; border-radius:2px; left: 20px; right: 20px; background: #707070;}\\QSlider::handle:vertical{height: ";
+                str.append(QString::number(373/(totalItemNum)));
+                str.append("px; width: 6px; border-radius:3px; margin-left:-1px; margin-right:-1px; background: #A7CB4A;}");
+                //qDebug() << "setStyleSheet == ...." <<str;
+                Slider_p->setStyleSheet(str);
+                Slider_p->setValue((totalItemNum-selectItemIndex-1)*(373/(totalItemNum-1)));
+            }
         }
         if(Current_Page == 1)
         {
@@ -1846,19 +1967,48 @@ void Widget::dev_work_status_task()
             QPen pen;
             pen.setColor(QColor(212, 212, 212));
             p.setPen(pen);
-            itemFont.setPointSize(20);
-            p.setFont(itemFont);
-
-            if(mDevMsg.devStatus != SETUP_STATUS) {
-                Select_Show_Menu_Spell_Index = Menu_Spell_Display_List.indexOf(Menu_Spell_List.at(selectItemIndex));
-                for(int ii=0; ii<showItemNum; ii++)
-                {          
-                    curPos = Select_Show_Menu_Spell_Index + (ii-(showItemNum/2));
-                    if((curPos < 0)||(curPos >= (Total_Show_Menu_Spell_Num)))    //边沿检测
-                        continue; //continue 语句只结束本次循环,而不是终止整个循环
-                    //p.drawText(750, Address_Spell[ii], Menu_Spell_Display_List[curPos]);
-                    p.drawText(742, Address_Spell[ii]-38, 30, 50, Qt::AlignCenter, Menu_Spell_Display_List[curPos]);
-                }
+            itemFont.setPointSize(50);
+            p.setFont(QFont("SonnetSansDisplay-Regular",50));//修改英文显示字体
+            if(mDevMsg.devStatus != SETUP_STATUS) {  
+                Mid_Slider_p->setOrientation(Qt::Vertical);
+                Mid_Slider_p->setGeometry(752, 90, 6, 300);
+                // Setup_Slider_p->move(752,80);
+                Mid_Slider_p->setMinimum(0);  // 最小值
+                Mid_Slider_p->setMaximum((300));  // 最大值
+                Mid_Slider_p->setSingleStep(300/(totalItemNum));  // 步长  // 步长
+                qDebug()<<"总步长= "<< totalItemNum;
+                //margin-left:-3pxmargin-left 就是设置标签的左外边距
+                QString str = "QSlider::groove:vertical{height: 300px; width: 4px; border-radius:2px; left: 20px; right: 20px; background: #707070;}\\QSlider::handle:vertical{height: ";
+                str.append(QString::number(300/(totalItemNum)));
+                str.append("px; width: 6px; border-radius:3px; margin-left:-1px; margin-right:-1px; background: #A7CB4A;}");
+                // Mid_Slider_p->setStyleSheet("QSlider::groove:vertical{height: 300px; width: 4px; border-radius:2px; left: 20px; right: 20px; background: #707070;}\
+                // QSlider::handle:vertical{height: 75px; width: 6px; border-radius:3px; margin-left:-1px; margin-right:-1px; background: #A7CB4A;}");
+                qDebug() << "setStyleSheet == ...." <<str;
+                Mid_Slider_p->setStyleSheet(str);
+                mMenu.grade = mSqliteClass.Sqlite_read_grade_from_menudb(pMenudbName);
+                if(mMenu.grade == toalMenuGrade) {//最后的菜品界面右侧显示字母
+                    Select_Show_Menu_Spell_Index = Menu_Spell_Display_List.indexOf(Menu_Spell_List.at(selectItemIndex));
+                    for(int ii=0; ii<spellDispNumber; ii++)
+                    {          
+                        curPos = Select_Show_Menu_Spell_Index + (ii-(spellDispNumber/2));
+                        if((curPos < 0)||(curPos >= (Total_Show_Menu_Spell_Num)))    //边沿检测
+                            continue; //continue 语句只结束本次循环,而不是终止整个循环
+                        //p.drawText(750, Address_Spell[ii], Menu_Spell_Display_List[curPos]);
+                        QString spellStr = Menu_Spell_Display_List[curPos].toUpper();
+                        if(curPos!=Select_Show_Menu_Spell_Index) {
+                            pen.setColor(QColor(212, 212, 212));
+                            p.setPen(pen);
+                            p.drawText(742, Address_Spell[ii]-38, 30, 50, Qt::AlignCenter, spellStr);
+                        } else {
+                            pen.setColor(QColor(167, 203, 74));
+                            p.setPen(pen);
+                            p.drawText(742, Address_Spell[ii]-38, 30, 50, Qt::AlignCenter, spellStr);
+                        }
+                    }
+                } else {//非最后界面右侧用滑条
+                    Mid_Slider_p->setValue((totalItemNum-selectItemIndex-1)*(300/(totalItemNum-1)));
+                    Mid_Slider_p->show();
+                }   
             }
         }
         if((Add_Step_By_Step==FRAME))
@@ -1866,8 +2016,6 @@ void Widget::dev_work_status_task()
             showItemNum = 7;
             QPainter p(this);
             QPen pen;
-            qDebug()<<"Add_Step_By_Step == FRAME";
-
             //绘制内容  界面显示菜单个数,最好为奇数  这里是7
             for(int i=0; i<showItemNum; i++)
             {
@@ -1883,17 +2031,17 @@ void Widget::dev_work_status_task()
                     pen.setColor(QColor(255,255,255));
                     p.setPen(pen);
                 }
-                else  if( (i == ((showItemNum/2) +1))|| (i == ((showItemNum/2) -1)) )
+                else if((i == ((showItemNum/2) +1))||(i == ((showItemNum/2) -1)))
                 {
                     pen.setColor(QColor(135,135,135));
                     p.setPen(pen);
                 }
-                else  if( (i == ((showItemNum/2) +2))|| (i == ((showItemNum/2) -2)) )
+                else if((i == ((showItemNum/2) +2))||(i == ((showItemNum/2) -2)))
                 {
                     pen.setColor(QColor(119,119,119));
                     p.setPen(pen);
                 }
-                else  if( (i == ((showItemNum/2) +3))|| (i == ((showItemNum/2) -3)) )
+                else if((i == ((showItemNum/2) +3))||(i == ((showItemNum/2) -3)))
                 {
                     pen.setColor(QColor(79,79,79));
                     p.setPen(pen);
@@ -1910,7 +2058,7 @@ void Widget::dev_work_status_task()
                 }
                 if(Current_Page == 1)
                 {
-                    offsetValue = 20;
+                    offsetValue = 30;
                 }
 
                 if(i == 0)
@@ -1981,7 +2129,10 @@ void Widget::dev_work_status_task()
         } else {
             if((Add_Step_By_Step>FRAME)&&(Add_Step_By_Step<=(FRAME*2)))//  8   9  10   11  12  13  14
             {
-                qDebug()<<"上滑Add_Step_By_Step = "<<Add_Step_By_Step;
+                #ifdef DEBUG_ENABLED
+                     qDebug()<<"上滑Add_Step_By_Step = "<<Add_Step_By_Step;
+                #endif 
+               
                 QPainter p(this);
                 QPen pen;
                 int j = Add_Step_By_Step-FRAME;
@@ -2012,14 +2163,14 @@ void Widget::dev_work_status_task()
                     curPos = selectItemIndex + (i-(showItemNum/2));
                     if((curPos < 0)||(curPos >= (totalItemNum)))    //边沿检测
                         continue; //
-                    int addOffert = 20;
+                    int addOffert = 30;
                     if(Current_Page == 0)
                     {
                         addOffert = 0;
                     }
                     if(Current_Page == 1)
                     {
-                        addOffert = 20;
+                        addOffert = 30;
                     }
                     if(i == 0) {   
                         if(Add_Step_By_Step < ((FRAME*2)- ((FRAME-1)/2)))  //   8   9   10
@@ -2096,7 +2247,10 @@ void Widget::dev_work_status_task()
                     else if(i == 3) {
                         //计算字体大小
                         Current_FontSize = Virtual_Font[3] - FONT_STEP_VALUE*j;
+                        #ifdef DEBUG_ENABLED
                         qDebug()<<"下滑字体大小 i=3 "<< Current_FontSize;
+                        #endif 
+                        
                         itemFont.setPixelSize(Current_FontSize);
                         p.setFont(itemFont);//朝下滑  6 
                         Last_Update_GUI = 0;
@@ -2227,14 +2381,14 @@ void Widget::dev_work_status_task()
                             continue; //
                         // Current_FontSize = baseFontSize - abs((i-(showItemNum/2)))*15;
                         // itemFont.setPointSize(Current_FontSize);
-                        int addOffert = 20;
+                        int addOffert = 30;
                         if(Current_Page == 0)
                         {
                             addOffert = 0;
                         }
                         if(Current_Page == 1)
                         {
-                            addOffert = 20;
+                            addOffert = 30;
                         }
                         if(i == 0)
                         {
@@ -2478,7 +2632,7 @@ void Widget::dev_update_ota_task(void)
         Current_FontSize = 28;
         itemFont.setPointSize(Current_FontSize);
         p.setFont(itemFont);
-        p.drawText(716, 440, "确定");
+        p.drawText(determineButtonX, determineButtonY, "确定");
         Button_Determine->show();//确定按键显示
     }
     else if (updateOtaStatus == Update_Ota_Fail)
@@ -2502,7 +2656,7 @@ void Widget::dev_update_ota_task(void)
         Current_FontSize = 28;
         itemFont.setPointSize(Current_FontSize);
         p.setFont(itemFont);
-        p.drawText(716, 440, "确定");
+        p.drawText(determineButtonX, determineButtonY, "确定");
         Button_Determine->show();//确定按键显示
     } 
 }
@@ -2519,7 +2673,10 @@ void Widget::dev_update_ota_task(void)
 void Widget::dev_site_config_net_task(int status)
 {
     int Current_FontSize = 28;
-    qDebug()<<"设备状态 =" << mDevMsg.devStatus ;
+    #ifdef DEBUG_ENABLED
+        qDebug()<<"设备状态 =" << mDevMsg.devStatus ;
+    #endif 
+    
     int w = this->width();      //宽
     int h = this->height();     //高
     QPainter p(this);
@@ -2550,8 +2707,8 @@ void Widget::dev_site_config_net_task(int status)
             Current_FontSize = 28;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
-            p.drawText(716, 440, "确定");
-            p.drawText(716, 68,  "返回");
+            p.drawText(determineButtonX, determineButtonY, "确定");
+            p.drawText(returnButtonX, returnButtonY,  "返回");
 
             Current_FontSize = 40;
             itemFont.setPointSize(Current_FontSize);
@@ -2563,11 +2720,14 @@ void Widget::dev_site_config_net_task(int status)
         break;
 
         case Config_Net_Status_Process:
-            qDebug()<<"Config_Net_Status_Process";
+            #ifdef DEBUG_ENABLED
+                qDebug()<<"Config_Net_Status_Process";
+            #endif
+            
             Current_FontSize = 28;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
-            p.drawText(716, 68, "返回");
+            p.drawText(returnButtonX, returnButtonY, "返回");
 
             Current_FontSize = 45;
             itemFont.setPointSize(Current_FontSize);
@@ -2596,11 +2756,10 @@ void Widget::dev_site_config_net_task(int status)
             Current_FontSize = 28;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
-            p.drawText(716, 68,  "返回");
+            p.drawText(returnButtonX, returnButtonY,  "返回");
             qDebug()<< "联网成功";
             Button_Cancel->show();  
-            update();
-          
+            update();  
         break;
 
         case Config_Net_Status_Fail:
@@ -2616,12 +2775,12 @@ void Widget::dev_site_config_net_task(int status)
             Current_FontSize = 45;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
-            p.drawText(250,  250, "联网失败");
+            p.drawText(250, 250, "联网失败");
 
             Current_FontSize = 28;
             itemFont.setPointSize(Current_FontSize);
             p.setFont(itemFont);
-            p.drawText(716, 68,  "返回");
+            p.drawText(returnButtonX, returnButtonY, "返回");
             qDebug()<< "联网失败";
             Button_Cancel->show();  
         break;
@@ -2674,8 +2833,8 @@ void Widget::factory_hardware_check_task(int status)
     Current_FontSize = 28;
     itemFont.setPointSize(Current_FontSize);
     p.setFont(itemFont);
-    p.drawText(716, 68,  "返回");
-    p.drawText(716, 440, "确定");
+    p.drawText(returnButtonX, returnButtonY,  "返回");
+    p.drawText(determineButtonX, determineButtonY, "确定");
     // Button_Cancel->hide();  
     // Button_Determine->hide(); 
     
@@ -2695,8 +2854,11 @@ void Widget::factory_hardware_check_task(int status)
     switch (status)
     { 
         case SCREEN_CHECK://屏幕测试
-            qDebug() << "屏幕测试";
-            qDebug() << "rgbTest = " << rgbTest;
+            #ifdef DEBUG_ENABLED
+                qDebug() << "屏幕测试";
+                qDebug() << "rgbTest = " << rgbTest;
+            #endif
+            
             switch (rgbTest)
             {
                 case 0: 
@@ -2942,9 +3104,9 @@ unsigned char Quick_Out_Of_Bound_Flage = 0;
 //快滑松手  //快滑滑动松手根据前一刻方向 来滑最后一格   ***************************
 void Widget::Scroll_Quick_TimeOut_Update_GUI()
 {
-    //#ifdef RELEASED_QUICK
-    qDebug()<<"Scroll_Quick_TimeOut_Update_GUI >"<<Release_Quick_TimeOut_Flage<<" "<<Add_Step_By_Step<<"Scroll_Dir = "<<Scroll_Dir;
-    //#endif
+    #ifdef DEBUG_ENABLED
+        qDebug()<<"Scroll_Quick_TimeOut_Update_GUI >"<<Release_Quick_TimeOut_Flage<<" "<<Add_Step_By_Step<<"Scroll_Dir = "<<Scroll_Dir;
+    #endif
 
     if(Scroll_Dir == 0x01)
     {
@@ -2958,6 +3120,7 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
         {
             if(selectItemIndex > 0) {
                 selectItemIndex--;
+                play_wav();
                 Slow_Alarm_Flage = 1;
                 Release_Quick_TimeOut_Flage = 1;
                 Add_Step_By_Step = FRAME;
@@ -2984,6 +3147,7 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
         {
             if(selectItemIndex < (totalItemNum-1)) {
                 selectItemIndex++;
+                play_wav();
                 selectItemIndexBak = selectItemIndex;
                 Slow_Alarm_Flage = 1;
                 Release_Quick_TimeOut_Flage = 1;
@@ -3021,13 +3185,19 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
                 if(Quick_Add_Step_Times == 4) {
                     Quick_Add_Step_Times = 0;
                     Quick_Add_Step--;
-                    qDebug()<<"Quick_Add_Step--" <<Scroll_Times_Quick_Last<<Quick_Add_Step;
+                    #ifdef DEBUG_ENABLED
+                        qDebug()<<"Quick_Add_Step--" <<Scroll_Times_Quick_Last<<Quick_Add_Step;
+                    #endif
+                    
                 }
                 Release_Quick_Dir_Update_Times = 0;
                 Release_Quick_Dir_Timeout->start(Scroll_Times_Quick_Last_Period);
             }
             else if(Quick_Add_Step == 1) {
-                qDebug()<<"Release_Quick_Dir_Update_Times+"<<Scroll_Times_Quick_Last<<Add_Step_By_Step;
+                #ifdef DEBUG_ENABLED
+                    qDebug()<<"Release_Quick_Dir_Update_Times+"<<Scroll_Times_Quick_Last<<Add_Step_By_Step;
+                #endif
+                
                 Release_Quick_Dir_Update_Times++;
                 Release_Quick_Dir_Timeout->start(Scroll_Times_Quick_Last_Period + 10*Release_Quick_Dir_Update_Times);
             }
@@ -3040,7 +3210,10 @@ void Widget::Scroll_Quick_TimeOut_Update_GUI()
 /***********************************************慢滑松手  靠近最近的那个*********************************/
 void Widget::Release_TimeOut_Update_GUI()
 {
-    qDebug()<<"Slow_Near--"<<Add_Step_By_Step;
+    #ifdef DEBUG_ENABLED
+        qDebug()<<"Slow_Near--"<<Add_Step_By_Step;
+    #endif
+    
     Release_Slow_Update_Times++;
     
     if((Add_Step_By_Step >= (FRAME/2)) && (Add_Step_By_Step < FRAME)) {//6  5  4  3
@@ -3056,7 +3229,10 @@ void Widget::Release_TimeOut_Update_GUI()
         Last_Update_GUI = 1;
         if(Release_Timeout->isActive() == true)   
             Release_Timeout->stop();
-        qDebug()<<"Add_Step_By_Step == "<<Add_Step_By_Step;
+        #ifdef DEBUG_ENABLED
+            qDebug()<<"Add_Step_By_Step == "<<Add_Step_By_Step;
+        #endif
+        
         Slow_Alarm_Flage = 1; //打开声音播放  Slow_Alarm_Flage 慢滑声音响动标志
         update();
     } else {
@@ -3068,7 +3244,10 @@ void Widget::Release_TimeOut_Update_GUI()
 /********************************慢滑松手  根据方向来决定滑动 **************************************************/
 void Widget::Release_Slow_Dir_TimeOut_Update_GUI()
 {
-    qDebug()<<"Slow_Dir -- Dir";
+    #ifdef DEBUG_ENABLED
+        qDebug()<<"Slow_Dir -- Dir";
+    #endif
+    
     if(Add_Step_By_Step == FRAME)
     {
         Alarm_Flage = 1; // 慢滑声音  标志
@@ -3088,6 +3267,7 @@ void Widget::Release_Slow_Dir_TimeOut_Update_GUI()
         {
             if(selectItemIndex > 0) {
                 selectItemIndex--;
+                play_wav();
                 Slow_Alarm_Flage = 1;
                 Add_Step_By_Step = FRAME;
                 Last_Update_GUI = 1;
@@ -3111,6 +3291,7 @@ void Widget::Release_Slow_Dir_TimeOut_Update_GUI()
         {
             if(selectItemIndex < (totalItemNum-1) && selectItemIndex<(selectItemIndexBak+2)) {
                 selectItemIndex++;
+                play_wav();
                 selectItemIndexBak = selectItemIndex;
                 Slow_Alarm_Flage = 1;//慢滑声音响动标志
                 Add_Step_By_Step = FRAME;
@@ -3164,7 +3345,10 @@ void Widget::Release_Slow_Dir_Near_Update_GUI()
 //********************************************************************************/
 void Widget::Slow_Scroll_Timer_Handle()
 {
-    qDebug() << "Slow_Scroll_Timer_Handle ";
+    #ifdef DEBUG_ENABLED
+        qDebug() << "Slow_Scroll_Timer_Handle ";
+    #endif
+    
     if((selectItemIndex == 0)&&(Scroll_Dir == 1))//最后一条不可以滑动
     {
         if(Slow_Scroll_Timer->isActive() == true) {
@@ -3217,6 +3401,7 @@ void Widget::Slow_Scroll_Timer_Handle()
         {
             if(selectItemIndex > 0) {
                 selectItemIndex--;
+                play_wav();
                 Slow_Alarm_Flage = 1;
                 Quick_Alarm_Times_Flage = 1;
 
@@ -3268,6 +3453,7 @@ void Widget::Slow_Scroll_Timer_Handle()
         {  
             if(selectItemIndex < (totalItemNum-1) ) {
                 selectItemIndex++;
+                play_wav();
                 Slow_Alarm_Flage = 1;
                 Quick_Alarm_Times_Flage = 1;
 
@@ -3446,10 +3632,10 @@ void Widget::dev_site_config_net_touch_handle(int Receive_Diff_Data_Total)
                 Widget_Page_Switch = 0;
                 Current_Page = 1;
                 selectItemIndex = 1;
+                update();
             }
-          
         }
-        update();
+      
     }
 }
 
@@ -3468,17 +3654,7 @@ void Widget::dev_update_ota_touch_handle(int Receive_Diff_Data_Total)
     if (Receive_Diff_Data_Total == 0x4000) {//确定按键    
         qDebug() << "固件更新确定按键" << devStatusBak;        
         mDevMsg.devStatus = devStatusBak;//固件更新过程中按确认键后回到之前的设备状态
-        update(); 
-        // QProcess p;
-        // //执行开始，括号里的字符串是执行的命令
-        // p.start("reboot");
-        // //设置命令执行过后，多少时间后来获取执行结果,单位毫秒
-        // p.waitForBytesWritten(); 
-        // if(!p.waitForFinished(1)) {
-        //     p.kill(); 
-        //     p.waitForFinished(1); 
-        // }
-        
+        update();   
     } else if (Receive_Diff_Data_Total == 0x8000) {//取消按键
         qDebug() << "固件更新取消按键";
         mDevMsg.devStatus = devStatusBak;//固件更新过程中按确认键后回到之前的设备状态
@@ -3502,10 +3678,10 @@ void Widget::dev_work_status_touch_handele(int Receive_Diff_Data_Total)
     unsigned char  Dir_Old = 0;
     int postionStart, postionEnd;
 
-    if(Receive_Diff_Data_Total == 0x4000 ||Receive_Diff_Data_Total == 0x8000)
-    {
-        play_wav();
-    }
+    // if(Receive_Diff_Data_Total == 0x4000 ||Receive_Diff_Data_Total == 0x8000)
+    // {
+    //     play_wav();
+    // }
     //写盘状态
     if(updateMenuStatus == Update_Menu_Ok)//菜单更新成功
     {
@@ -3533,7 +3709,10 @@ void Widget::dev_work_status_touch_handele(int Receive_Diff_Data_Total)
         if(pselectMenuName == "更改网络") {
             //NetConfigStatus = Config_Net_Status_Idle;
             NetConfigStatus = Config_Net_Status_Process;//主屏显示网络配置中
-            qDebug() << "确定按键..........";
+            #ifdef DEBUG_ENABLED
+                qDebug() << "确定按键..........";
+            #endif
+            
             devStatusBak = mDevMsg.devStatus;
             mDevMsg.devStatus = SITE_CONFIG_NET_STATUS;//设备进入配网状态
 
@@ -3551,14 +3730,21 @@ void Widget::dev_work_status_touch_handele(int Receive_Diff_Data_Total)
             return;
         }
         else if(pselectMenuName == "出厂设置") {
+            
+            configMsgSt pDevMsg = mSqliteClass.Sqlite_read_msg_from_configdb();//配置数据库读取设备信息
+        
             devStatusBak = -1;
-            mDevMsg.devStatus = FACTORY_BIND_OK_STATUS;//恢复出厂状态
+            mDevMsg.devStatus = LOCAL_UNBIND_STATUS ,      //本地解绑完成，一直上传解绑状态到后台;//恢复出厂状态
             p_Widget_Meaasge->hide();
             Current_Page = 0;
             Widget_Page_Switch = 0;
             p_Widget_Meaasge->Son_Button_Cancel->hide();
             p_Widget_Meaasge->Son_Button_Determine->hide(); //确认按键
-            Send_Message_Type = Send_Unbind_Cmd_To_Golang;//消息队列发送解绑指令
+            if (pDevMsg.devStatus == SITE_BIND_OK_STATUS)
+            {
+                Send_Message_Type = Send_Unbind_Cmd_To_Golang;//消息队列发送解绑指令
+            } 
+            
             updateMenuStatus = -1;
             update();
             return;
@@ -3694,15 +3880,20 @@ void Widget::dev_work_status_touch_handele(int Receive_Diff_Data_Total)
             mMenu = mSqliteClass.Sqlite_read_menu_from_menudb(pMenudbName, pselectMenuName); //从数据库读取选择的菜单信息
             if(mMenu.nextmenu !="") {
                 pMenudbName = mMenu.nextmenu;//当前选中的数据库名称
-            }    
-            qDebug()<<"选取的菜单信息 = "<<mMenu.id <<mMenu.grade <<mMenu.context <<mMenu.dish_id <<mMenu.nextmenu;
+            }  
+            #ifdef DEBUG_ENABLED
+                qDebug()<<"选取的菜单信息 = "<<mMenu.id <<mMenu.grade <<mMenu.context <<mMenu.dish_id <<mMenu.nextmenu;
+            #endif  
+            
             if(Current_Page < (Total_Page-1) & mDevMsg.devStatus != SETUP_STATUS ) {
                 Current_Page++;
                 if(mMenu.nextmenu !="") {
                     Current_Page = 1;
                 } else {
                     Menu_ID = mMenu.dish_id;
-                    qDebug() <<"菜品 id = "<<Menu_ID;
+                    #ifdef DEBUG_ENABLED
+                       qDebug() <<"菜品 id = "<<Menu_ID;
+                    #endif  
                 }
             }
             if(Current_Page >= (Total_Page-1)) {
@@ -3755,11 +3946,17 @@ void Widget::dev_work_status_touch_handele(int Receive_Diff_Data_Total)
             return;
         } else {
             mMenu = mSqliteClass.Sqlite_read_menu_from_menudb(pMenudbName, pselectMenuName); //从数据库读取选择的菜单信息
-            qDebug()<<"取消菜单 = "<<mMenu.premenu <<mMenu.nextmenu <<mMenu.context;
-            qDebug()<<"当前页 = "<<Current_Page;
-            qDebug()<<"\r\n";
+            #ifdef DEBUG_ENABLED
+                qDebug()<<"取消菜单 = "<<mMenu.premenu <<mMenu.nextmenu <<mMenu.context;
+                qDebug()<<"当前页 = "<<Current_Page;
+                qDebug()<<"\r\n";
+            #endif
+            
             if (Current_Page > 0) {
+                #ifdef DEBUG_ENABLED
                 qDebug()<<"mMenu.premenu = "<<mMenu.premenu;
+                #endif
+                
                 if(mMenu.premenu != "") {
                     if(Current_Page == 2) {
                         Current_Page = 1;//不是写菜品页，都默认为中间页
@@ -3768,7 +3965,10 @@ void Widget::dev_work_status_touch_handele(int Receive_Diff_Data_Total)
                         //根据当前选中的菜单回退时保持上一级菜单的选中记录id
                         selectItemIndex = mSqliteClass.Sqlite_read_premenu_id_from_menudb(mMenu.premenu, pMenudbName)-1;
                         selectItemIndex_Page1 = selectItemIndex;
+                        #ifdef DEBUG_ENABLED
                         qDebug()<<"取消selectItemIndex = "<<selectItemIndex;
+                        #endif
+                        
                         pMenudbName = mMenu.premenu;//当前选中的数据库名称
                         if(mMenu.premenu == "menu_lev1") {
                             Current_Page = 0;
@@ -3840,7 +4040,10 @@ void Widget::dev_work_status_touch_handele(int Receive_Diff_Data_Total)
         //快滑界面刷新
         if((Receive_Diff_Data_Total>>8) == 4) {//松手
             Receive_Diff_Data = Receive_Diff_Data_Total - 0x400;
-            qDebug()<<"按键松开.................selectItemIndexBak = "<<selectItemIndexBak;
+            #ifdef DEBUG_ENABLED
+                qDebug()<<"按键松开.................selectItemIndexBak = "<<selectItemIndexBak;
+            #endif
+            
             selectItemIndexBak = selectItemIndex;
             if(Data_Flage == 0) {//方向确定
                 Scroll_Dir = 1;
@@ -3877,16 +4080,24 @@ void Widget::dev_work_status_touch_handele(int Receive_Diff_Data_Total)
                     Quick_Add_Step = 1;
                     Quick_Scroll_Period = 40;
                     Scroll_Times =  500/Quick_Scroll_Period;
-                    qDebug()<<"Scroll_Times = "<<Scroll_Times;
+                    #ifdef DEBUG_ENABLED
+                        qDebug()<<"Scroll_Times = "<<Scroll_Times;
+                    #endif
+                    
                     Scroll_Times += (8 - Scroll_Times%8 -4);
-                    qDebug()<<"Scroll_Times1+= "<<Scroll_Times%8;
+                    #ifdef DEBUG_ENABLED
+                        qDebug()<<"Scroll_Times1+= "<<Scroll_Times%8;
+                    #endif
+                    
                     Scroll_Times_Quick_Last = 4;
                     Scroll_Times_Quick_Last_Period = 20;
                 } else {
                     Quick_Scroll_Period = 40;
                     Scroll_Times = 400/Quick_Scroll_Period;// 30次
-
-                    qDebug()<<"Scroll_Times2+= "<<Scroll_Times%8;
+                    #ifdef DEBUG_ENABLED
+                        qDebug()<<"Scroll_Times2+= "<<Scroll_Times%8;
+                    #endif
+                    
                     Scroll_Times_Quick_Last_Period = 20;
                 }
 
@@ -3894,32 +4105,42 @@ void Widget::dev_work_status_touch_handele(int Receive_Diff_Data_Total)
                     Quick_Add_Step = 3;// 16 12---缓解步骤  4->3  3->2  2->1 4--缓解步骤
                     Scroll_Times_Quick_Last = 16-8;
                     Scroll_Times += (8 - Scroll_Times%8);
-                    qDebug()<<"Decress_Times= "<< 4;
+                    #ifdef DEBUG_ENABLED
+                        qDebug()<<"Decress_Times= "<< 4;
+                    #endif 
                 }
                 if((Receive_Diff_Data == 8)||(Receive_Diff_Data == 7)) {
                     Scroll_Times_Quick_Last = 12-6;// 12  8---缓解步骤  3->2  2->1 4--缓解步骤
                     Scroll_Times += (8 - Scroll_Times%8 - 4);
                     Quick_Add_Step = 2;
-                    qDebug()<<"Decress_Times= "<< 3;
+                    #ifdef DEBUG_ENABLED
+                         qDebug()<<"Decress_Times= "<< 3;
+                    #endif 
                 }
                 if((Receive_Diff_Data == 6)||(Receive_Diff_Data == 5)) {
                     Scroll_Times_Quick_Last = 8-4;// 8  4---缓解步骤 2->1  4--缓解时间
                     Scroll_Times += (8 - Scroll_Times%8);
                     Quick_Add_Step = 2;
-                    qDebug()<<"Decress_Times= "<< 2;
+                    #ifdef DEBUG_ENABLED
+                         qDebug()<<"Decress_Times= "<< 2;
+                    #endif   
                 }
                 if((Receive_Diff_Data == 4)||(Receive_Diff_Data == 3)) {
                     Scroll_Times_Quick_Last = 2;// 8 4---缓解步骤 2->1   4--缓解时间
                     Scroll_Times = (Scroll_Times<<1)/3;
                     Scroll_Times += (8 - Scroll_Times%8);
                     Quick_Add_Step = 2;
-                    qDebug()<<"Decress_Times= "<< 2;
+                    #ifdef DEBUG_ENABLED
+                        qDebug()<<"Decress_Times= "<< 2;
+                    #endif  
                 }
                 if(Receive_Diff_Data == 2) {// 4 4---缓解时间
                     Quick_Add_Step = 1;
                     Scroll_Times_Quick_Last = 1;
                     Scroll_Times += (8 - Scroll_Times%8 - 4);
-                    qDebug()<<"Decress_Times= "<< 1;
+                    #ifdef DEBUG_ENABLED
+                        qDebug()<<"Decress_Times= "<< 1;
+                    #endif 
                 }
                 Scroll_Quick_Flage = 1;
                 if((Quick_Add_Step == 1)&&(Scroll_Times <= 48)) {//让喇叭单次响动
@@ -3955,10 +4176,16 @@ void Widget::factory_hardware_check_touch_handle(int Receive_Diff_Data_Total)
     int value = 0;
     value = touchClass.get_touch_value();
     Touch_Value_list <<  QString::number(value);
-    qDebug() << "触摸按键值 = " << value;
+    #ifdef DEBUG_ENABLED
+        qDebug() << "触摸按键值 = " << value;
+    #endif
+    
  
     if (Receive_Diff_Data_Total == 0x4000) {//确定按键    
-        qDebug() << "确定按键"; 
+        #ifdef DEBUG_ENABLED
+            qDebug() << "确定按键"; 
+        #endif
+        
         Hardware_Check_Update_Timer->stop();  
         Setup_Touch_Check_Timer->start(300);     
         mDevMsg.devStatus = devStatusBak;
@@ -3975,7 +4202,10 @@ void Widget::factory_hardware_check_touch_handle(int Receive_Diff_Data_Total)
         update();  
     } 
     else if (Receive_Diff_Data_Total == 0x8000) {//取消按键
-        qDebug() << "取消按键";
+        #ifdef DEBUG_ENABLED
+            qDebug() << "取消按键";
+        #endif
+        
         Setup_Touch_Check_Timer->start(300); 
         mDevMsg.devStatus = devStatusBak;//
         Hardware_Check_Update_Timer->stop();
@@ -3991,7 +4221,6 @@ void Widget::factory_hardware_check_touch_handle(int Receive_Diff_Data_Total)
         }
         update();
     }
-   
 }
 
 void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
@@ -4001,7 +4230,13 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
     unsigned char  Dir_Old = 0;
     int value = 0;
 
-   //audio.play();
+    if(Receive_Diff_Data_Total == 0x4000 ||Receive_Diff_Data_Total == 0x8000)
+    {
+        play_wav();
+        Setup_Touch_Value_list.clear();
+        Setup_Touch_Time_list.clear();
+
+    }
     
     //获取touch值判断是否触发设置按键
     if(mDevMsg.devStatus != SETUP_STATUS & mDevMsg.devStatus != FACTORY_CHECK_STATUS & Current_Page == 0 ) 
@@ -4104,7 +4339,7 @@ Widget_Message::Widget_Message(QWidget *parent): QWidget(parent)
 
     Son_Button_Cancel = new QPushButton(this);
     Son_Button_Cancel->setStyleSheet(Son_Button_Cancel_list.join(';'));
-    Son_Button_Cancel->move(718,9);
+    Son_Button_Cancel->move(718,50);
     Son_Button_Cancel->resize(75, 20);
     Son_Button_Cancel->hide(); //取消按键
 
@@ -4117,7 +4352,7 @@ Widget_Message::Widget_Message(QWidget *parent): QWidget(parent)
 
     Son_Button_Determine = new QPushButton(this);
     Son_Button_Determine->setStyleSheet(Son_Button_Determine_list.join(';'));
-    Son_Button_Determine->move(718,451);
+    Son_Button_Determine->move(718,420);
     Son_Button_Determine->resize(75, 20);
     Son_Button_Determine->hide(); //确认按键
 }
@@ -4278,7 +4513,7 @@ void Widget_Message::paintEvent(QPaintEvent *)
         Current_FontSize = 28;
         itemFont.setPointSize(Current_FontSize);
         p.setFont(itemFont);
-        p.drawText(716, 68, "返回");
+        p.drawText(returnButtonX, returnButtonY, "返回");
     }
     //显示设备信息 
     else if(Display_Status_Current == Display_Status_Dev_Msg)
@@ -4329,7 +4564,7 @@ void Widget_Message::paintEvent(QPaintEvent *)
         Current_FontSize = 28;
         itemFont.setPointSize(Current_FontSize);
         p.setFont(itemFont);
-        p.drawText(716, 68, "返回");
+        p.drawText(returnButtonX, returnButtonY, "返回");
     }
     //显示网络信息 
     else if(Display_Status_Current == Display_Status_Net_Msg)
@@ -4371,7 +4606,7 @@ void Widget_Message::paintEvent(QPaintEvent *)
         Current_FontSize = 28;
         itemFont.setPointSize(Current_FontSize);
         p.setFont(itemFont);
-        p.drawText(716, 68, "返回");
+        p.drawText(returnButtonX, returnButtonY, "返回");
     }
     //设置界面重新配网
     else if(Display_Status_Current == Display_Status_Change_Net)//
@@ -4413,8 +4648,8 @@ void Widget_Message::paintEvent(QPaintEvent *)
         Current_FontSize = 28;
         itemFont.setPointSize(Current_FontSize);
         p.setFont(itemFont);
-        p.drawText(716, 68, "返回");
-        p.drawText(716, 440, "确定");
+        p.drawText(returnButtonX, returnButtonY, "返回");
+        p.drawText(determineButtonX, determineButtonY, "确定");
 
         // qDebug()<<"Config_Net_Status_Process";
         // Current_FontSize = 28;
@@ -4468,7 +4703,7 @@ void Widget_Message::paintEvent(QPaintEvent *)
         Current_FontSize = 28;
         itemFont.setPointSize(Current_FontSize);
         p.setFont(itemFont);
-        p.drawText(716, 68, "返回");
-        p.drawText(716, 440, "确定");
+        p.drawText(returnButtonX, returnButtonY, "返回");
+        p.drawText(determineButtonX, determineButtonY, "确定");
     }
 }

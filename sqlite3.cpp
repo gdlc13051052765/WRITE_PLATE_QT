@@ -22,7 +22,6 @@
 configMsgSt Sqlite3::Sqlite_read_msg_from_configdb(void)
 {
     configMsgSt pDevMsg;
-
     
     //打开配置数据库
     QSqlDatabase database;
@@ -61,6 +60,20 @@ configMsgSt Sqlite3::Sqlite_read_msg_from_configdb(void)
             //获取设备id
             pDevMsg.devId = query.value(0).toInt();
             printf("dev id = %d \n",pDevMsg.devId);
+        }
+    }
+     //查找菜单等级
+    query.exec("select menu_level from config");
+    if(!query.exec()) {
+        qDebug()<<query.lastError();
+    } else {
+        //开始就先执行一次next()函数，那么query指向结果集的第一条记录
+        if(query.next()) {
+            //获取query所指向的记录在结果集中的编号
+            int rowNum = query.at();
+            //获取设备id
+            pDevMsg.toalMenuGrade = query.value(0).toInt();
+            printf("toalMenuGrade  = %d \n",pDevMsg.toalMenuGrade);
         }
     }
     //查找设备SN
@@ -424,12 +437,12 @@ int Sqlite3::Sqlite_read_grade_from_menudb(QString menuname)
     QString str = "/home/meican/menudb/";
     str.append(menuname);
     str.append(".db");
-    qDebug("str = "+ str.toLatin1());
+    //qDebug("str = "+ str.toLatin1());
     database.setDatabaseName(str);
     if (!database.open()) {
-        qDebug() << "Error: Failed to connect menu database" << database.lastError();
+        //qDebug() << "Error: Failed to connect menu database" << database.lastError();
     } else {
-        qDebug() << "Succeed to connect menu database" ;
+        //qDebug() << "Succeed to connect menu database" ;
     }
     //查询数据
     QSqlQuery query;
@@ -437,7 +450,7 @@ int Sqlite3::Sqlite_read_grade_from_menudb(QString menuname)
     while (query.next()) 
     {
         grade = query.value("grade").toInt(); 
-        qDebug() << "grade = "<< grade;
+        //qDebug() << "grade = "<< grade;
         if (grade) {
             break;
         }     

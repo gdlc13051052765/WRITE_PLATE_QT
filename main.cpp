@@ -18,6 +18,7 @@ int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
     Widget w;
+     
 
     int index = QFontDatabase::addApplicationFont("/opt/Fonts/HYQiHei-65S.ttf");
     if(index != -1)
@@ -31,6 +32,8 @@ int main(int argc, char *argv[])
             a.setFont(font_zh);
         }
     }
+
+    index = QFontDatabase::addApplicationFont("/opt/Fonts/SonnetSansDisplay-Regular.otf");
     int id = -1;
     key_t key = ftok("/tmp", 66);
     id = msgget(key,  0666|IPC_CREAT);

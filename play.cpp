@@ -228,7 +228,7 @@ void Play::run()
     while(doPlay)
     {
         size = fread(audioBuf, 1, 4096*10, pWavFile);
-		//qWarning("audioBuf size = %d........ \n",size);
+		qWarning("audioBuf size = %d........ \n",size);
         if(size <= 0) {
             break;
         } else {
@@ -240,8 +240,6 @@ void Play::run()
     qWarning("play wav file over....\n");
     // snd_pcm_close(play_handle);
     // play_handle = NULL;
-
-	//QThread::msleep(100);
     return;
 }
 

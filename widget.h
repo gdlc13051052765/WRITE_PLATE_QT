@@ -303,6 +303,7 @@ private:
 
     QSlider *Slider_p;            //滑动条
     QSlider *Setup_Slider_p;            //滑动条
+    QSlider *Mid_Slider_p;            //滑动条
 
     Led Shock_Motor;
 
