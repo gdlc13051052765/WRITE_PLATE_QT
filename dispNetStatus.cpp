@@ -59,8 +59,8 @@ void DispNetStatus::paintEvent(QPaintEvent *)
 
         pen.setColor(QColor(255, 255, 255));
         p.setPen(pen);
-        int Current_FontSize = 28;
-        itemFont.setPointSize(Current_FontSize);
+        int Current_FontSize = 35;
+        itemFont.setPixelSize(Current_FontSize);
         p.setFont(itemFont);
         //p.drawText(120,  465, dispContent);
         p.drawText(300 - dispContent.size()*10,  465, dispContent);
@@ -75,8 +75,8 @@ void DispNetStatus::paintEvent(QPaintEvent *)
 
         pen.setColor(QColor(255, 255, 255));
         p.setPen(pen);
-        int Current_FontSize = 28;
-        itemFont.setPointSize(Current_FontSize);
+        int Current_FontSize = 35;
+        itemFont.setPixelSize(Current_FontSize);
         p.setFont(itemFont);
         p.drawText(350 - dispContent.size()*10,  465, dispContent);
     }

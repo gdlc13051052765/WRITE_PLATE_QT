@@ -25,7 +25,10 @@ configMsgSt Sqlite3::Sqlite_read_msg_from_configdb(void)
     
     //打开配置数据库
     QSqlDatabase database;
-    database = QSqlDatabase::addDatabase("QSQLITE");
+    if(QSqlDatabase::contains("qt_sql_default_connection"))
+        database = QSqlDatabase::database("qt_sql_default_connection");
+    else
+        database = QSqlDatabase::addDatabase("QSQLITE");
     database.setDatabaseName("/home/meican/base_config.db");
     if (!database.open()) {
         qDebug() << "Error: Failed to connect database." << database.lastError();
@@ -171,7 +174,10 @@ void Sqlite3::Sqlite_update_ota_result(void)
 
     //打开配置数据库
     QSqlDatabase database;
-    database = QSqlDatabase::addDatabase("QSQLITE");
+    if(QSqlDatabase::contains("qt_sql_default_connection"))
+        database = QSqlDatabase::database("qt_sql_default_connection");
+    else
+        database = QSqlDatabase::addDatabase("QSQLITE");
     database.setDatabaseName("/home/meican/base_config.db");
     if (!database.open()) {
         qDebug() << "Error: Failed to connect database." << database.lastError();
@@ -203,8 +209,10 @@ QStringList Sqlite3::Sqlite_read_context_from_menudb(QString menuname)
     QStringList tempList;
     QSqlDatabase database;
 
-    
-    database = QSqlDatabase::addDatabase("QSQLITE");
+    if(QSqlDatabase::contains("qt_sql_default_connection"))
+        database = QSqlDatabase::database("qt_sql_default_connection");
+    else
+        database = QSqlDatabase::addDatabase("QSQLITE");
     QString str = "/home/meican/menudb/";
     str.append(menuname);
     str.append(".db");
@@ -248,7 +256,10 @@ QStringList Sqlite3::Sqlite_read_spell_from_menudb(QString menuname)
     QStringList tempList;
     QSqlDatabase database;
 
-    database = QSqlDatabase::addDatabase("QSQLITE");
+    if(QSqlDatabase::contains("qt_sql_default_connection"))
+        database = QSqlDatabase::database("qt_sql_default_connection");
+    else
+        database = QSqlDatabase::addDatabase("QSQLITE");
     QString str = "/home/meican/menudb/";
     str.append(menuname);
     str.append(".db");
@@ -292,7 +303,10 @@ menuSt Sqlite3::Sqlite_read_menu_from_menudb(QString menuname, QString contextst
     menuSt pMenu;
     QSqlDatabase database;
 
-    database = QSqlDatabase::addDatabase("QSQLITE");
+    if(QSqlDatabase::contains("qt_sql_default_connection"))
+        database = QSqlDatabase::database("qt_sql_default_connection");
+    else
+        database = QSqlDatabase::addDatabase("QSQLITE");
     QString str = "/home/meican/menudb/";
     str.append(menuname);
     str.append(".db");
@@ -342,7 +356,10 @@ int Sqlite3::Sqlite_read_premenu_id_from_menudb(QString menuname, QString premen
     int id;
     QSqlDatabase database;
 
-    database = QSqlDatabase::addDatabase("QSQLITE");
+    if(QSqlDatabase::contains("qt_sql_default_connection"))
+        database = QSqlDatabase::database("qt_sql_default_connection");
+    else
+        database = QSqlDatabase::addDatabase("QSQLITE");
     QString str = "/home/meican/menudb/";
     str.append(menuname);
     str.append(".db");
@@ -387,7 +404,10 @@ QString Sqlite3::Sqlite_read_nextmenu_context_from_menudb(QString menuname, QStr
     QString precontext;
     QSqlDatabase database;
 
-    database = QSqlDatabase::addDatabase("QSQLITE");
+    if(QSqlDatabase::contains("qt_sql_default_connection"))
+        database = QSqlDatabase::database("qt_sql_default_connection");
+    else
+        database = QSqlDatabase::addDatabase("QSQLITE");
     QString str = "/home/meican/menudb/";
     str.append(menuname);
     str.append(".db");
@@ -433,7 +453,10 @@ int Sqlite3::Sqlite_read_grade_from_menudb(QString menuname)
     int grade = 0;
     QSqlDatabase database;
 
-    database = QSqlDatabase::addDatabase("QSQLITE");
+    if(QSqlDatabase::contains("qt_sql_default_connection"))
+        database = QSqlDatabase::database("qt_sql_default_connection");
+    else
+        database = QSqlDatabase::addDatabase("QSQLITE");
     QString str = "/home/meican/menudb/";
     str.append(menuname);
     str.append(".db");
@@ -473,7 +496,10 @@ void Sqlite3::Sqlite_update_process_db_run(void)
 {
     //打开配置数据库
     QSqlDatabase database;
-    database = QSqlDatabase::addDatabase("QSQLITE");
+    if(QSqlDatabase::contains("qt_sql_default_connection"))
+        database = QSqlDatabase::database("qt_sql_default_connection");
+    else
+        database = QSqlDatabase::addDatabase("QSQLITE");
     database.setDatabaseName("/home/meican/process_protection.db");
     if (!database.open()) {
         qDebug() << "Error: Failed to connect database." << database.lastError();
