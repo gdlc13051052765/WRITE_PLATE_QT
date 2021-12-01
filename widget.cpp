@@ -159,6 +159,7 @@ bool touchLock = false;//按键锁
 
 int selectItemIndexBak = 0;//菜品标号备份
 bool quickSlowMoveFlag = false;//快慢滑动标记
+bool MiddleKeyFlag = false;//中间按键标记
 
 int toalMenuGrade = 0;//总的菜单等级
 
@@ -3279,14 +3280,18 @@ void Widget::Release_Slow_Dir_TimeOut_Update_GUI()
 
         if(Add_Step_By_Step >= (2*FRAME+1))//8 9 10 11 12 13 14
         {
-            if(selectItemIndex < (totalItemNum-1) && selectItemIndex<(selectItemIndexBak+2)) {
-                selectItemIndex++;
-                play_wav();
-                selectItemIndexBak = selectItemIndex;
-                Slow_Alarm_Flage = 1;//慢滑声音响动标志
-                Add_Step_By_Step = FRAME;
-                Last_Update_GUI = 1;
-            }
+            //if(MiddleKeyFlag == true) 
+            {
+                //精细选择滑动限制
+                if(selectItemIndex < (totalItemNum-1) && selectItemIndex<(selectItemIndexBak+2)) {
+                    selectItemIndex++;
+                    play_wav();
+                    selectItemIndexBak = selectItemIndex;
+                    Slow_Alarm_Flage = 1;//慢滑声音响动标志
+                    Add_Step_By_Step = FRAME;
+                    Last_Update_GUI = 1;
+                }
+            }  
         }
         if(selectItemIndex >= (totalItemNum-1)) {//最后一条不可以滑动
             selectItemIndex = totalItemNum-1;
@@ -3364,25 +3369,24 @@ void Widget::Slow_Scroll_Timer_Handle()
 
     if(Scroll_Dir == 1)//下滑
     {
-        //慢滑精细选择时控制当前菜品不能出最下面的边界
-        if((selectItemIndex < (selectItemIndexBak-2)) && quickSlowMoveFlag == false)
-        {
-            if(Slow_Scroll_Timer->isActive() == true) {
-                Slow_Scroll_Timer->stop();
+        if(MiddleKeyFlag == true) {
+             //慢滑精细选择时控制当前菜品不能出最下面的边界
+            if((selectItemIndex < (selectItemIndexBak-2)) && quickSlowMoveFlag == false)
+            {
+                if(Slow_Scroll_Timer->isActive() == true) {
+                    Slow_Scroll_Timer->stop();
+                }
+                if(Alarm_Timer->isActive() == true) {
+                    Alarm_Timer->stop();
+                }
+                return;
             }
-            if(Alarm_Timer->isActive() == true) {
-                Alarm_Timer->stop();
-            }
-            return;
         } 
         Add_Step_By_Step = Add_Step_By_Step - Quick_Add_Step;
         Last_Update_GUI = 0;
      
         if((Add_Step_By_Step == 5)&&((Slow_Alarm_Flage == 1)||(Quick_Alarm_Times_Flage == 1)))
         {
-            if(Quick_Alarm_Times_Flage == 1) {
-            
-            }
             if(Slow_Alarm_Flage == 1) {
                 Slow_Alarm_Flage = 0;
             }
@@ -3400,7 +3404,7 @@ void Widget::Slow_Scroll_Timer_Handle()
             }
         }
         if(selectItemIndex == 0) 
-        {  //最后一条不可以滑动
+        {   //最后一条不可以滑动
             Slow_Alarm_Flage = 1;
             Add_Step_By_Step = FRAME;
             Last_Update_GUI = 1;
@@ -3409,23 +3413,24 @@ void Widget::Slow_Scroll_Timer_Handle()
     }
     else if(Scroll_Dir == 2)
     {
-        //慢滑精细选择时控制当前菜品不能出最上面的边界
-        if((selectItemIndex > (selectItemIndexBak+2)) && quickSlowMoveFlag == false)
-        {
-            if(Slow_Scroll_Timer->isActive() == true) {
-                Slow_Scroll_Timer->stop();
+        if(MiddleKeyFlag == true) {
+            //精细选择滑动限制
+            if((selectItemIndex > (selectItemIndexBak+2)) && quickSlowMoveFlag == false) {
+                if(Slow_Scroll_Timer->isActive() == true) {
+                    Slow_Scroll_Timer->stop();
+                }
+                if(Alarm_Timer->isActive() == true) {
+                    Alarm_Timer->stop();
+                }
+                return;
             }
-            if(Alarm_Timer->isActive() == true) {
-                Alarm_Timer->stop();
-            }
-            return;
         } 
 
         //Add_Step_By_Step++;       //上滑菜单
         Add_Step_By_Step = Add_Step_By_Step + Quick_Add_Step;
         Last_Update_GUI = 0;
 
-        if((Add_Step_By_Step == 10) && ((Slow_Alarm_Flage == 1)||(Quick_Alarm_Times_Flage == 1)))
+        if((Add_Step_By_Step == 10) && ((Slow_Alarm_Flage == 1) || (Quick_Alarm_Times_Flage == 1)))
         {
             if(Quick_Alarm_Times_Flage == 1) {
                 Quick_Alarm_Times_Flage = 0;
@@ -3435,8 +3440,6 @@ void Widget::Slow_Scroll_Timer_Handle()
             }
             if(Slow_Alarm_Flage == 1) {
                 Slow_Alarm_Flage = 0;
-                #ifdef  ALARM_SLOW_ENABLE//慢滑  铃声响动
-                #endif
             }
         }
         if(Add_Step_By_Step >= (2*FRAME+1))//8 9 10 11 12 13 14
@@ -3452,7 +3455,7 @@ void Widget::Slow_Scroll_Timer_Handle()
             }
         }
         if(selectItemIndex == (totalItemNum-1)) 
-        {//最后一条不可以滑动
+        {   //最后一条不可以滑动
             Slow_Alarm_Flage = 1;
             Add_Step_By_Step = FRAME;
             Last_Update_GUI = 1;
@@ -3469,8 +3472,7 @@ void Widget::Slow_Scroll_Timer_Handle()
             Slow_Scroll_Timer->stop();
             Scroll_Times = 0;
         }
-        if(Scroll_Quick_Flage == 1)  //
-        {
+        if(Scroll_Quick_Flage == 1) {
             Scroll_Quick_Flage = 0;
             Release_Quick_TimeOut_Flage = 0;
             Release_Quick_Dir_Update_Times = 1;
@@ -3664,6 +3666,8 @@ void Widget::dev_update_ota_touch_handle(int Receive_Diff_Data_Total)
 * 作    者： lc
 * 创建时间： 2021/8/2
 ==================================================================================*/
+int valueBak = -1;
+int touchvalue = 0;
 void Widget::dev_work_status_touch_handele(int Receive_Diff_Data_Total)
 {
     unsigned short Receive_Diff_Data = 0;
@@ -3671,7 +3675,20 @@ void Widget::dev_work_status_touch_handele(int Receive_Diff_Data_Total)
     unsigned char  Dir_Old = 0;
     int postionStart, postionEnd;
 
-    if((Receive_Diff_Data_Total == 0x8000 &(Current_Page == 0))&(mDevMsg.devStatus != SETUP_STATUS))
+    valueBak = touchvalue;
+    touchvalue = touchClass.get_touch_value();
+    //valueBak = touchvalue;
+    if((touchvalue > 48) & (touchvalue < 60) & valueBak ==0 ) {
+        if(MiddleKeyFlag == false)
+            MiddleKeyFlag = true;
+        qDebug()<<"中间按键触发。。。。。。";
+    } else if(touchvalue == 255) {
+        MiddleKeyFlag = false;
+        touchvalue = 0;
+    }
+    qDebug() <<"触摸按键值。。。。。"<< touchvalue << valueBak;
+
+    if((Receive_Diff_Data_Total == 0x8000 & (Current_Page == 0)) & (mDevMsg.devStatus != SETUP_STATUS))
     {
         if (NetConfigStatus != Config_Net_Status_Process) {
             qDebug() << "设置按键触发";
@@ -4246,9 +4263,13 @@ void Widget::Handle_Touch_Value_Event(unsigned short Receive_Diff_Data_Total)
         play_wav();
         Setup_Touch_Value_list.clear();
         Setup_Touch_Time_list.clear();
-
     }
-    
+   
+    if(touchClass.get_touch_value() == 255) {
+        MiddleKeyFlag = false;
+        touchvalue = 0;
+    }
+        
     //获取touch值判断是否触发设置按键
     if(mDevMsg.devStatus != SETUP_STATUS & mDevMsg.devStatus != FACTORY_CHECK_STATUS & Current_Page == 0 ) 
     {
